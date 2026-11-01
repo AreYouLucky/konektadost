@@ -19,6 +19,7 @@ class Barangay extends Model
      */
     protected $fillable = [
         'municipality_id',
+        'description',
         'psg_code',
         'brgy_name',
         'bounds',

@@ -80,7 +80,12 @@ class LayerAFunctionToolsTest extends TestCase
         $this->assertContains($datasets['datasets']['facilities']['status'], ['available', 'partial']);
         $this->assertContains($datasets['datasets']['telecom_sites']['status'], ['available', 'partial']);
         $this->assertContains($datasets['datasets']['agriculture_count_estimates']['status'], ['available', 'partial']);
-        $this->assertSame('empty', $datasets['datasets']['roads']['status']);
+        $this->assertGreaterThan(0, $datasets['datasets']['roads']['national_records']);
+
+        // Also verify A3 & A6 road availability on a municipality with imported roads (e.g., Alicia, Bohol id = 929)
+        $datasetsAlicia = $registry->execute('get_available_datasets', ['municipality_id' => 929]);
+        $this->assertSame('available', $datasetsAlicia['datasets']['roads']['status']);
+        $this->assertGreaterThan(0, $datasetsAlicia['datasets']['roads']['local_records']);
 
         // A4: get_local_assets
         $assets = $registry->execute('get_local_assets', ['municipality_id' => 959]);
@@ -104,7 +109,11 @@ class LayerAFunctionToolsTest extends TestCase
         $this->assertTrue($geo['location_boundary']['has_bounds']);
         $this->assertTrue($geo['location_boundary']['has_centroid']);
         $this->assertGreaterThan(0, $geo['barangay_boundaries']['total_barangays']);
-        $this->assertSame('empty', $geo['road_network']['status']);
+
+        $geoAlicia = $registry->execute('get_geographic_data_availability', ['municipality_id' => 929]);
+        $this->assertSame('available', $geoAlicia['road_network']['status']);
+        $this->assertGreaterThan(0, $geoAlicia['road_network']['local_road_records']);
+        $this->assertGreaterThan(0, $geoAlicia['road_network']['national_road_records']);
 
         // Layer A bundle execution
         $bundle = $registry->executeLayerA($municipality);

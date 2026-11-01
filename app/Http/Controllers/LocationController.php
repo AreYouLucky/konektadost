@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\FunctionTools\FunctionToolRegistry;
 use App\Models\Barangay;
 use App\Models\CollectionYear;
 use App\Models\DostTech;
@@ -110,6 +111,7 @@ class LocationController extends Controller
         $cityPopulation = $profile['population_statistics']['population_current'] ?? $municipality->populationFigure?->population;
         $barangayAssessment = app(PrioritizationService::class)->calculatePriorityScores($municipality, $focus);
         $functionToolsBundle = app(AssessmentFunctionTools::class)->computeLocationBundle($municipality);
+        $layerEResult = app(FunctionToolRegistry::class)->executeLayerE($municipality);
         $results = array_map(
             fn (IndicatorResult $result) => $result->toArray(),
             $assessor->assess($municipality, $focus)
@@ -132,6 +134,7 @@ class LocationController extends Controller
             ],
             'municipalityProfile' => $profile,
             'functionToolsBundle' => $functionToolsBundle,
+            'layerEResult' => $layerEResult,
             // Which collection year every population figure above belongs to,
             // so the UI never labels a number with a year the data doesn't have.
             'populationYear' => CollectionYear::activeYear(),

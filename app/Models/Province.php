@@ -21,6 +21,7 @@ class Province extends Model
      */
     protected $fillable = [
         'psg_code',
+        'description',
         'name',
         'type',
         'english_type',

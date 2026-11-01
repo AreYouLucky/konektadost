@@ -154,6 +154,12 @@ class AssessmentFunctionTools
                 'parameters' => $locationParams,
             ],
             [
+                'name' => 'identify_underserved_areas',
+                'layer' => 'Layer C: Gap Detection & Barangay Prioritization',
+                'description' => 'Identify barangays with verified multi-sector development needs (health, education, road accessibility, digital connectivity, safety, agriculture) and quantify overlapping deficits without double-counting.',
+                'parameters' => $locationParams,
+            ],
+            [
                 'name' => 'calculate_priority_scores',
                 'layer' => 'Layer C: Gap Detection & Barangay Prioritization',
                 'description' => 'Compute composite priority scores (0-100) for all barangays in a municipality based on population, density, facility deficits, and isolation distance.',
@@ -213,10 +219,24 @@ class AssessmentFunctionTools
             'analyze_sti_laboratory_capacity' => $this->sectorService->analyzeStiLaboratoryCapacity($location),
             'analyze_safety_and_drrm' => $this->sectorService->analyzeSafetyAndDrrm($location),
             'detect_development_gaps' => $this->prioritizationService->detectDevelopmentGaps($location),
-            'calculate_priority_scores', 'identify_underserved_areas' => $location instanceof Municipality
+            'identify_underserved_areas' => $location instanceof Municipality
+                ? $this->prioritizationService->identifyUnderservedAreas($location)
+                : ['error' => 'identify_underserved_areas requires a Municipality model.'],
+            'calculate_priority_scores' => $location instanceof Municipality
                 ? $this->prioritizationService->calculatePriorityScores($location)
                 : ['error' => 'calculate_priority_scores requires a Municipality model.'],
             'get_local_dost_projects' => $this->dostCatalogService->getLocalDostProjects($location),
+            'search_dost_technologies' => app(\App\FunctionTools\LayerD\SearchDostTechnologiesTool::class)->execute($arguments),
+            'match_dost_interventions' => app(\App\FunctionTools\LayerE\MatchDostInterventionsTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
+            'assess_intervention_suitability' => app(\App\FunctionTools\LayerE\AssessInterventionSuitabilityTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
+            'assess_implementation_feasibility' => app(\App\FunctionTools\LayerE\AssessImplementationFeasibilityTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
+            'identify_implementation_partners' => app(\App\FunctionTools\LayerE\IdentifyImplementationPartnersTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
+            'estimate_intervention_requirements' => app(\App\FunctionTools\LayerE\EstimateInterventionRequirementsTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
+            'generate_intervention_plan' => app(\App\FunctionTools\LayerF\GenerateInterventionPlanTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
+            'define_performance_indicators' => app(\App\FunctionTools\LayerF\DefinePerformanceIndicatorsTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
+            'estimate_intervention_outcomes' => app(\App\FunctionTools\LayerF\EstimateInterventionOutcomesTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
+            'conduct_risk_assessment' => app(\App\FunctionTools\LayerF\ConductRiskAssessmentTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
+            'generate_action_plan' => app(\App\FunctionTools\LayerF\GenerateActionPlanTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
             default => throw new InvalidArgumentException("Unknown assessment function tool: {$toolName}"),
         };
     }
@@ -244,7 +264,11 @@ class AssessmentFunctionTools
                 'safety_and_drrm' => $this->sectorService->analyzeSafetyAndDrrm($location),
             ],
             'detected_gaps' => $this->prioritizationService->detectDevelopmentGaps($location),
+            'underserved_areas' => $location instanceof Municipality ? $this->prioritizationService->identifyUnderservedAreas($location) : null,
+            'priority_scores' => $location instanceof Municipality ? $this->prioritizationService->calculatePriorityScores($location) : null,
             'local_dost_projects' => $this->dostCatalogService->getLocalDostProjects($location),
+            'matched_interventions' => $location instanceof Municipality ? app(\App\FunctionTools\LayerE\MatchDostInterventionsTool::class)->execute(['municipality_id' => $location->id]) : null,
+            'action_plan' => $location instanceof Municipality ? app(\App\FunctionTools\LayerF\GenerateActionPlanTool::class)->execute(['municipality_id' => $location->id]) : null,
         ];
     }
 

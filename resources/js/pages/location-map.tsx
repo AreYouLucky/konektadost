@@ -83,14 +83,11 @@ export default function LocationMapPage({ provinces, selectedProvince, municipal
 
     // Assessment is keyed on the city, so a selected province alone is not
     // enough to run one.
-    const assessSelectedCity = useCallback(
-        (focus: string) => {
-            if (!selectedCity) return;
+    const assessSelectedCity = useCallback(() => {
+        if (!selectedCity) return;
 
-            router.get(route('location.assess'), { city: selectedCity, focus });
-        },
-        [selectedCity],
-    );
+        router.get(route('location.assess'), { city: selectedCity });
+    }, [selectedCity]);
 
     const labsCount = mapMarkers?.dost_labs?.length ?? 0;
     const techsCount = mapMarkers?.dost_techs?.length ?? 0;
@@ -324,9 +321,8 @@ function LocationSelector({
     selectedCity: string | null;
     onProvinceChange: (psgCode: string) => void;
     onCityChange: (psgCode: string) => void;
-    onAssess: (focus: string) => void;
+    onAssess: () => void;
 }) {
-    const [focus, setFocus] = useState('general');
     const sortedProvinces = useMemo(() => [...provinces.features].sort((a, b) => a.properties.name.localeCompare(b.properties.name)), [provinces]);
 
     const sortedCities = useMemo(
@@ -378,32 +374,7 @@ function LocationSelector({
                     </select>
                 </div>
 
-                <div className="flex flex-col gap-2">
-                    <Label htmlFor="focus-select">Assessment focus</Label>
-                    <select id="focus-select" className={selectClass} value={focus} onChange={(e) => setFocus(e.target.value)}>
-                        <option value="general">General assessment (all available)</option>
-                        <option value="population_and_social_needs">Population and social needs</option>
-                        <option value="health_and_public_health">Health and public health</option>
-                        <option value="education_skills_and_scientific_talent">Education, skills and scientific talent</option>
-                        <option value="science_technology_and_innovation_capacity">Science, technology and innovation capacity</option>
-                        <option value="infrastructure_and_connectivity">Infrastructure and digital connectivity</option>
-                        <option value="environment_climate_disaster">Environment, climate and disaster risk</option>
-                        <option value="economy_and_livelihood" disabled>
-                            Economy and livelihood opportunities — no data
-                        </option>
-                        <option value="agriculture_fisherries_food" disabled>
-                            Agriculture, fisheries and food systems — no data
-                        </option>
-                        <option value="essential_resources" disabled>
-                            Essential resources and environmental services — no data
-                        </option>
-                        <option value="institutional_capacity" disabled>
-                            Institutional capacity and service delivery — no data
-                        </option>
-                    </select>
-                </div>
-
-                <Button onClick={() => onAssess(focus)} disabled={!selectedCity}>
+                <Button onClick={onAssess} disabled={!selectedCity}>
                     Assess Location
                 </Button>
 

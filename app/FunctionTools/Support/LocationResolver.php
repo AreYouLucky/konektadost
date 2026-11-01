@@ -38,6 +38,20 @@ class LocationResolver
             }
         }
 
+        if (! empty($args['province_id'])) {
+            $prov = Province::query()->find((int) $args['province_id']);
+            if ($prov !== null) {
+                return $prov;
+            }
+        }
+
+        if (! empty($args['barangay_id'])) {
+            $bgy = Barangay::query()->find((int) $args['barangay_id']);
+            if ($bgy !== null) {
+                return $bgy;
+            }
+        }
+
         if (! empty($args['psg_code'])) {
             $code = trim((string) $args['psg_code']);
 

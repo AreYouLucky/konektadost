@@ -100,11 +100,20 @@ class LayerBFunctionToolsTest extends TestCase
         $this->assertGreaterThan(0, $digitalQc['counts']['total_telecom_sites']);
         $this->assertGreaterThan(0, $digitalQc['barangay_coverage']['barangays_with_telecom']);
 
-        // B5: analyze_road_accessibility
-        $roads = $registry->execute('analyze_road_accessibility', ['municipality_id' => 959]);
-        $this->assertSame('empty', $roads['status']);
-        $this->assertSame(0, $roads['summary']['total_road_segments']);
-        $this->assertNull($roads['summary']['total_road_length_km']);
+        // B5: analyze_road_accessibility (verify on Alicia, Bohol id = 929 and Quezon City id = 126 with imported roads)
+        $roadsAlicia = $registry->execute('analyze_road_accessibility', ['municipality_id' => 929]);
+        $this->assertSame('available', $roadsAlicia['status']);
+        $this->assertGreaterThan(0, $roadsAlicia['summary']['total_road_segments']);
+        $this->assertGreaterThan(0, $roadsAlicia['summary']['total_road_length_km']);
+        $this->assertGreaterThan(0, $roadsAlicia['summary']['road_density_km_per_km2']);
+        $this->assertNotEmpty($roadsAlicia['by_road_class']);
+        $this->assertNotNull($roadsAlicia['barangay_coverage']);
+        $this->assertGreaterThan(0, $roadsAlicia['barangay_coverage']['barangays_with_roads']);
+
+        $indAlicia = $registry->execute('calculate_indicators', ['municipality_id' => 929]);
+        $this->assertSame('available', $indAlicia['road_indicators']['status']);
+        $this->assertGreaterThan(0, $indAlicia['road_indicators']['total_road_length_km']);
+        $this->assertGreaterThan(0, $indAlicia['road_indicators']['road_density_km_per_km2']);
 
         // B6: analyze_agriculture
         $agri = $registry->execute('analyze_agriculture', ['municipality_id' => 959]);

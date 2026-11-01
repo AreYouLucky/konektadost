@@ -17,6 +17,21 @@ use App\FunctionTools\LayerB\AnalyzeRoadAccessibilityTool;
 use App\FunctionTools\LayerB\AnalyzeSafetyAndDrrmTool;
 use App\FunctionTools\LayerB\AnalyzeStiLaboratoryCapacityTool;
 use App\FunctionTools\LayerB\CalculateIndicatorsTool;
+use App\FunctionTools\LayerC\CalculatePriorityScoresTool;
+use App\FunctionTools\LayerC\DetectDevelopmentGapsTool;
+use App\FunctionTools\LayerC\IdentifyUnderservedAreasTool;
+use App\FunctionTools\LayerD\GetLocalDostProjectsTool;
+use App\FunctionTools\LayerD\SearchDostTechnologiesTool;
+use App\FunctionTools\LayerE\AssessImplementationFeasibilityTool;
+use App\FunctionTools\LayerE\AssessInterventionSuitabilityTool;
+use App\FunctionTools\LayerE\EstimateInterventionRequirementsTool;
+use App\FunctionTools\LayerE\IdentifyImplementationPartnersTool;
+use App\FunctionTools\LayerE\MatchDostInterventionsTool;
+use App\FunctionTools\LayerF\ConductRiskAssessmentTool;
+use App\FunctionTools\LayerF\DefinePerformanceIndicatorsTool;
+use App\FunctionTools\LayerF\EstimateInterventionOutcomesTool;
+use App\FunctionTools\LayerF\GenerateActionPlanTool;
+use App\FunctionTools\LayerF\GenerateInterventionPlanTool;
 use Illuminate\Database\Eloquent\Model;
 use InvalidArgumentException;
 
@@ -52,6 +67,29 @@ class FunctionToolRegistry
         AnalyzeAgricultureTool::class,            // B6: analyze_agriculture
         AnalyzeStiLaboratoryCapacityTool::class,  // B7: analyze_sti_laboratory_capacity
         AnalyzeSafetyAndDrrmTool::class,          // B8: analyze_safety_and_drrm
+
+        // Layer C – Gap Detection and Barangay Prioritization
+        DetectDevelopmentGapsTool::class,         // C1: detect_development_gaps
+        IdentifyUnderservedAreasTool::class,      // C2: identify_underserved_areas
+        CalculatePriorityScoresTool::class,       // C3: calculate_priority_scores
+
+        // Layer D – DOST Catalog and Project Retrieval
+        SearchDostTechnologiesTool::class,        // D1: search_dost_technologies
+        GetLocalDostProjectsTool::class,          // D2: get_local_dost_projects
+
+        // Layer E – Intervention Matching and Feasibility
+        MatchDostInterventionsTool::class,           // E1: match_dost_interventions
+        AssessInterventionSuitabilityTool::class,     // E2: assess_intervention_suitability
+        AssessImplementationFeasibilityTool::class,   // E3: assess_implementation_feasibility
+        IdentifyImplementationPartnersTool::class,    // E4: identify_implementation_partners
+        EstimateInterventionRequirementsTool::class,  // E5: estimate_intervention_requirements
+
+        // Layer F – Action Plan and Executive Output Generation
+        GenerateInterventionPlanTool::class,          // F1: generate_intervention_plan
+        DefinePerformanceIndicatorsTool::class,       // F2: define_performance_indicators
+        EstimateInterventionOutcomesTool::class,      // F3: estimate_intervention_outcomes
+        ConductRiskAssessmentTool::class,             // F4: conduct_risk_assessment
+        GenerateActionPlanTool::class,                // F5: generate_action_plan & 5 Executive Outputs
     ];
 
     /**
@@ -141,6 +179,86 @@ class FunctionToolRegistry
             'agriculture' => app(AnalyzeAgricultureTool::class)->forLocation($location),
             'sti_laboratory_capacity' => app(AnalyzeStiLaboratoryCapacityTool::class)->forLocation($location),
             'safety_and_drrm' => app(AnalyzeSafetyAndDrrmTool::class)->forLocation($location),
+        ];
+    }
+
+    /**
+     * Execute all 3 Layer C tools for a given location model.
+     *
+     * @return array<string, mixed>
+     */
+    public function executeLayerC(Model $location): array
+    {
+        return [
+            'detected_gaps' => app(DetectDevelopmentGapsTool::class)->forLocation($location),
+            'underserved_areas' => app(IdentifyUnderservedAreasTool::class)->forLocation($location),
+            'priority_scores' => app(CalculatePriorityScoresTool::class)->forLocation($location),
+        ];
+    }
+
+    /**
+     * Execute Layer D tools for a given location model and technology search.
+     *
+     * @param  array<string, mixed>  $searchFilters
+     * @return array<string, mixed>
+     */
+    public function executeLayerD(Model $location, array $searchFilters = []): array
+    {
+        return [
+            'local_projects' => app(GetLocalDostProjectsTool::class)->forLocation($location),
+            'technologies' => app(SearchDostTechnologiesTool::class)->execute($searchFilters),
+        ];
+    }
+
+    /**
+     * Execute Layer E tools for a given location model.
+     *
+     * @param  array<string, mixed>  $options
+     * @return array<string, mixed>
+     */
+    public function executeLayerE(Model $location, array $options = []): array
+    {
+        $idArgs = ['municipality_id' => $location->id];
+
+        $matched = app(MatchDostInterventionsTool::class)->execute($idArgs);
+        $topIntervention = null;
+        if (!empty($matched['gap_interventions'])) {
+            foreach ($matched['gap_interventions'] as $gapMatch) {
+                if (!empty($gapMatch['matched_interventions'])) {
+                    $topIntervention = $gapMatch['matched_interventions'][0];
+                    break;
+                }
+            }
+        }
+
+        $interventionArg = $topIntervention ? ['intervention_id' => $topIntervention['intervention_id']] : [];
+        $evalArgs = array_merge($idArgs, $interventionArg, $options);
+
+        return [
+            'matched_interventions' => $matched,
+            'suitability_assessment' => app(AssessInterventionSuitabilityTool::class)->execute($evalArgs),
+            'feasibility_assessment' => app(AssessImplementationFeasibilityTool::class)->execute($evalArgs),
+            'implementation_partners' => app(IdentifyImplementationPartnersTool::class)->execute($evalArgs),
+            'requirements_estimate' => app(EstimateInterventionRequirementsTool::class)->execute($evalArgs),
+        ];
+    }
+
+    /**
+     * Execute Layer F tools for a given location model.
+     *
+     * @param  array<string, mixed>  $options
+     * @return array<string, mixed>
+     */
+    public function executeLayerF(Model $location, array $options = []): array
+    {
+        $idArgs = array_merge(['municipality_id' => $location->id], $options);
+
+        return [
+            'intervention_plan' => app(GenerateInterventionPlanTool::class)->execute($idArgs),
+            'performance_indicators' => app(DefinePerformanceIndicatorsTool::class)->execute($idArgs),
+            'intervention_outcomes' => app(EstimateInterventionOutcomesTool::class)->execute($idArgs),
+            'risk_assessment' => app(ConductRiskAssessmentTool::class)->execute($idArgs),
+            'action_plan' => app(GenerateActionPlanTool::class)->execute($idArgs),
         ];
     }
 }

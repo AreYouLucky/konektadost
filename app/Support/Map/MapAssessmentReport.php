@@ -46,6 +46,9 @@ class MapAssessmentReport
         $barangayAssessment = $locationModel instanceof Municipality
             ? app(PrioritizationService::class)->calculatePriorityScores($locationModel, $focus)
             : null;
+        $layerEResult = $locationModel instanceof Municipality
+            ? app(\App\FunctionTools\FunctionToolRegistry::class)->executeLayerE($locationModel)
+            : null;
 
         return [
             'location' => [
@@ -63,6 +66,7 @@ class MapAssessmentReport
             ],
             'municipalityProfile' => $profile,
             'functionToolsBundle' => $functionToolsBundle,
+            'layerEResult' => $layerEResult,
             'barangayAssessment' => $barangayAssessment,
             'populationYear' => $resources['population']['year'], 'populationReason' => $resources['population']['reason'],
             'focus' => $focus, 'dimensions' => IndicatorCatalog::dimensions(), 'results' => $results,
