@@ -224,23 +224,17 @@ type ActiveSection = 'indicators' | 'barangays' | 'resources';
 
 export default function LocationAssessment({
     location,
-    focus,
-    dimensions,
     results,
     barangayAssessment,
     localLaboratories = [],
     functionToolsBundle = null,
     populationYear = null,
     populationReason = null,
-    assessmentParams,
     mapReturnUrl,
     resourceSummary,
     agricultureSummary,
 }: AssessmentPageProps) {
     const [activeSection, setActiveSection] = useState<ActiveSection>('indicators');
-
-    const focusLabel = dimensions.find((d) => d.key === focus)?.label ?? 'General assessment';
-    const focusSupported = focus === 'general' || dimensions.find((d) => d.key === focus)?.supported;
 
     const shortfalls = results.filter((r) => evidenceState(r) === 'priority');
     const measuredCount = results.filter((r) => evidenceState(r) !== 'missing').length;
@@ -284,13 +278,10 @@ export default function LocationAssessment({
                     </div>
                 </div>
 
-                {/* Unified Location Overview + Assessment Focus Bar */}
+                {/* Unified Location Overview Bar */}
                 <LocationOverviewBar
                     location={location}
-                    focus={focus}
-                    dimensions={dimensions}
                     populationYear={populationYear}
-                    assessmentParams={assessmentParams}
                 />
                 {populationReason && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{populationReason}</p>}
 
@@ -379,59 +370,42 @@ export default function LocationAssessment({
                                     id="location-indicators-heading"
                                     className="text-xl leading-snug font-semibold tracking-tight text-slate-900 sm:text-2xl dark:text-slate-100"
                                 >
-                                    Indicators &amp; Benchmark Comparison{' '}
-                                    <span className="font-medium text-[#123575] dark:text-blue-200">({focusLabel})</span>
+                                    Indicators &amp; Benchmark Comparison
                                 </h2>
                                 <p className="text-muted-foreground max-w-3xl text-sm leading-relaxed">
-                                    Compares {location.name}’s measured rates against dynamically computed national reference rates.
+                                    Compares {location.name}’s measured rates against dynamically computed national reference rates across all available domains.
                                 </p>
                             </div>
                         </header>
 
                         <div className="p-4 sm:p-6">
-                            {!focusSupported ? (
-                                <Card className="rounded-xl border-amber-200 bg-amber-50 shadow-sm dark:bg-amber-950/30">
-                                    <CardContent className="flex gap-3 p-4">
-                                        <Info className="mt-0.5 size-4 shrink-0 text-amber-600" />
-                                        <div className="text-sm">
-                                            <p className="font-medium">No dataset available for this dimension</p>
-                                            <p className="text-muted-foreground mt-1">
-                                                The framework covers {dimensions.length} assessment dimensions, but this application currently holds
-                                                data for only the {dimensions.filter((d) => d.supported).length} listed as supported. No indicators
-                                                are reported here rather than guessing.
-                                            </p>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            ) : (
-                                <div className="flex flex-col gap-5">
-                                    {shortfalls.length > 0 && (
-                                        <Card className="rounded-xl border-amber-200 bg-amber-50/70 shadow-sm dark:bg-amber-950/20">
-                                            <CardHeader className="pb-2">
-                                                <CardTitle className="flex items-center gap-2 text-sm text-amber-900 dark:text-amber-200">
-                                                    <AlertTriangle className="size-4 shrink-0 text-amber-600" />
-                                                    <span>Detected Indicator Shortfalls &amp; Pressures ({shortfalls.length})</span>
-                                                </CardTitle>
-                                            </CardHeader>
-                                            <CardContent className="grid gap-2 sm:grid-cols-2">
-                                                {shortfalls.map((result) => (
-                                                    <div
-                                                        key={result.key}
-                                                        className="bg-background/90 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200/70 px-3 py-2.5 text-xs"
-                                                    >
-                                                        <span className="font-medium">{result.label}</span>
-                                                        <span className="text-muted-foreground font-mono">
-                                                            {format(result.value)} vs {format(result.benchmark)} ({result.unit})
-                                                        </span>
-                                                    </div>
-                                                ))}
-                                            </CardContent>
-                                        </Card>
-                                    )}
+                            <div className="flex flex-col gap-5">
+                                {shortfalls.length > 0 && (
+                                    <Card className="rounded-xl border-amber-200 bg-amber-50/70 shadow-sm dark:bg-amber-950/20">
+                                        <CardHeader className="pb-2">
+                                            <CardTitle className="flex items-center gap-2 text-sm text-amber-900 dark:text-amber-200">
+                                                <AlertTriangle className="size-4 shrink-0 text-amber-600" />
+                                                <span>Detected Indicator Shortfalls &amp; Pressures ({shortfalls.length})</span>
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="grid gap-2 sm:grid-cols-2">
+                                            {shortfalls.map((result) => (
+                                                <div
+                                                    key={result.key}
+                                                    className="bg-background/90 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200/70 px-3 py-2.5 text-xs"
+                                                >
+                                                    <span className="font-medium">{result.label}</span>
+                                                    <span className="text-muted-foreground font-mono">
+                                                        {format(result.value)} vs {format(result.benchmark)} ({result.unit})
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </CardContent>
+                                    </Card>
+                                )}
 
-                                    <UnifiedIndicatorsTable results={results} />
-                                </div>
-                            )}
+                                <UnifiedIndicatorsTable results={results} />
+                            </div>
                         </div>
                     </section>
                 )}
@@ -587,16 +561,10 @@ function UnifiedIndicatorsTable({ results }: { results: AssessmentResult[] }) {
 
 function LocationOverviewBar({
     location,
-    focus,
-    dimensions,
     populationYear,
-    assessmentParams,
 }: {
     location: AssessmentPageProps['location'];
-    focus: string;
-    dimensions: AssessmentDimension[];
     populationYear: number | null;
-    assessmentParams?: Record<string, string | number>;
 }) {
     const populationLabel = populationYear === null ? 'Population' : `Population (${populationYear})`;
     const popStats = location.population_statistics;
@@ -658,7 +626,7 @@ function LocationOverviewBar({
 
     return (
         <Card className="rounded-2xl shadow-[0_4px_20px_-8px_#153d3824]">
-            <CardContent className="flex flex-col gap-4 p-4 sm:p-5">
+            <CardContent className="p-4 sm:p-5">
                 <div className="grid min-w-0 grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
                     {items.map(([label, value, subtext]) => (
                         <div key={label} className="flex flex-col gap-0.5">
@@ -667,32 +635,6 @@ function LocationOverviewBar({
                             {subtext && <span className="text-muted-foreground text-[11px]">{subtext}</span>}
                         </div>
                     ))}
-                </div>
-
-                <div className="flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:gap-4">
-                    <Label htmlFor="focus-select" className="text-xs">
-                        Assessment Focus Sector
-                    </Label>
-                    <select
-                        id="focus-select"
-                        value={focus}
-                        onChange={(event) =>
-                            router.get(
-                                route('location.assess'),
-                                { ...(assessmentParams ?? { city: location.psg_code }), focus: event.target.value },
-                                { preserveState: true },
-                            )
-                        }
-                        className="border-input focus-visible:ring-ring h-10 w-full max-w-lg rounded-lg border bg-white px-3 py-1 text-sm outline-none focus-visible:ring-2"
-                    >
-                        <option value="general">General assessment (all available)</option>
-                        {dimensions.map((dimension) => (
-                            <option key={dimension.key} value={dimension.key} disabled={!dimension.supported}>
-                                {dimension.label}
-                                {dimension.supported ? '' : ' — no data'}
-                            </option>
-                        ))}
-                    </select>
                 </div>
             </CardContent>
         </Card>

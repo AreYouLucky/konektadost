@@ -109,7 +109,7 @@ class LocationController extends Controller
         $profile = app(MunicipalityProfileService::class)->getMunicipalityProfile($municipality);
         $cityPopulation = $profile['population_statistics']['population_current'] ?? $municipality->populationFigure?->population;
         $barangayAssessment = app(PrioritizationService::class)->calculatePriorityScores($municipality, $focus);
-        $functionToolsBundle = app(AssessmentFunctionTools::class)->computeLocationBundle($municipality, $focus);
+        $functionToolsBundle = app(AssessmentFunctionTools::class)->computeLocationBundle($municipality);
         $results = array_map(
             fn (IndicatorResult $result) => $result->toArray(),
             $assessor->assess($municipality, $focus)

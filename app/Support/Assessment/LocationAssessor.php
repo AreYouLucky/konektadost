@@ -189,9 +189,9 @@ class LocationAssessor
     private function distinctTestCount(Model $location): int
     {
         return $location->laboratories()
-            ->with('services')
+            ->with('tests')
             ->get()
-            ->flatMap(fn ($lab) => $lab->services->map(fn ($service) => [
+            ->flatMap(fn ($lab) => $lab->tests->map(fn ($service) => [
                 $service->service_name ?? $service->test_name ?? $service->name,
                 $service->description ?? $service->method ?? null,
             ]))

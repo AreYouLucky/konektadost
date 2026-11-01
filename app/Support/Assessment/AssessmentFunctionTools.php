@@ -103,13 +103,7 @@ class AssessmentFunctionTools
                 'name' => 'calculate_indicators',
                 'layer' => 'Layer B: Statistical & Sector Analysis',
                 'description' => 'Calculate all per-capita and density indicators for the location and compare against dynamically computed national benchmarks.',
-                'parameters' => [
-                    'type' => 'object',
-                    'properties' => [
-                        ...$locationParams['properties'],
-                        'dimension' => ['type' => 'string', 'description' => 'Optional assessment dimension filter (or general).'],
-                    ],
-                ],
+                'parameters' => $locationParams,
             ],
             [
                 'name' => 'analyze_health_access',
@@ -126,44 +120,44 @@ class AssessmentFunctionTools
             [
                 'name' => 'analyze_digital_connectivity',
                 'layer' => 'Layer B: Statistical & Sector Analysis',
-                'description' => 'Compute cell site counts, 5G/4G shares, per-100k rate, network operators, tower companies, and barangays with 0 cell sites.',
+                'description' => 'Compute cell site counts, 5G/4G shares, per-10k and per-100k rates, network operators, tower companies, colocation status, and barangays with 0 cell sites.',
+                'parameters' => $locationParams,
+            ],
+            [
+                'name' => 'analyze_road_accessibility',
+                'layer' => 'Layer B: Statistical & Sector Analysis',
+                'description' => 'Analyze road network accessibility (road length by class, surface type, road condition, road density in km/km², and barangays without road access) or report road dataset unavailability.',
                 'parameters' => $locationParams,
             ],
             [
                 'name' => 'analyze_agriculture',
                 'layer' => 'Layer B: Statistical & Sector Analysis',
-                'description' => 'Aggregate agriculture, fisheries, and livestock production estimates, planted area (sqm), top commodities, and annual revenue/cost/net PHP.',
+                'description' => 'Aggregate agriculture, fisheries, and livestock production estimates, planted area (sqm and hectares), top commodities, barangay participation, and annual revenue/cost/net PHP.',
                 'parameters' => $locationParams,
             ],
             [
                 'name' => 'analyze_sti_laboratory_capacity',
                 'layer' => 'Layer B: Statistical & Sector Analysis',
-                'description' => 'Compute accredited OneLab laboratories, distinct testing/calibration services, free vs paid tests, and nearest laboratory distance in km.',
+                'description' => 'Compute accredited OneLab laboratories, distinct testing/calibration services, free vs paid tests, capability domains, and nearest laboratory distance in km.',
+                'parameters' => $locationParams,
+            ],
+            [
+                'name' => 'analyze_safety_and_drrm',
+                'layer' => 'Layer B: Statistical & Sector Analysis',
+                'description' => 'Compute emergency, fire, police, and DRRM safety facilities per 10k and 100k population, barangays without safety facilities, and nearest safety facility distance in km.',
                 'parameters' => $locationParams,
             ],
             [
                 'name' => 'detect_development_gaps',
                 'layer' => 'Layer C: Gap Detection & Barangay Prioritization',
                 'description' => 'Mathematically detect indicator shortfalls and service pressures against dynamic benchmarks and compute severity scores (0-100).',
-                'parameters' => [
-                    'type' => 'object',
-                    'properties' => [
-                        ...$locationParams['properties'],
-                        'dimension' => ['type' => 'string', 'description' => 'Optional dimension filter.'],
-                    ],
-                ],
+                'parameters' => $locationParams,
             ],
             [
                 'name' => 'calculate_priority_scores',
                 'layer' => 'Layer C: Gap Detection & Barangay Prioritization',
                 'description' => 'Compute composite priority scores (0-100) for all barangays in a municipality based on population, density, facility deficits, and isolation distance.',
-                'parameters' => [
-                    'type' => 'object',
-                    'properties' => [
-                        ...$locationParams['properties'],
-                        'focus' => ['type' => 'string', 'description' => 'Optional sector focus.'],
-                    ],
-                ],
+                'parameters' => $locationParams,
             ],
             [
                 'name' => 'search_dost_technologies',
@@ -210,23 +204,17 @@ class AssessmentFunctionTools
             'get_local_assets' => $this->datasetService->getLocalAssets($location),
             'get_telecom_infrastructure' => $this->datasetService->getTelecomInfrastructure($location, includeSiteRecords: true),
             'get_geographic_data_availability' => $this->datasetService->getGeographicDataAvailability($location),
-            'calculate_indicators' => [
-                'indicators' => array_map(
-                    fn (IndicatorResult $r) => $r->toArray(),
-                    $this->assessor->assess($location, isset($arguments['dimension']) ? (string) $arguments['dimension'] : null)
-                ),
-            ],
+            'calculate_indicators' => $this->sectorService->calculateIndicators($location),
             'analyze_health_access' => $this->sectorService->analyzeHealthAccess($location),
             'analyze_education_access' => $this->sectorService->analyzeEducationAccess($location),
             'analyze_digital_connectivity' => $this->sectorService->analyzeDigitalConnectivity($location),
+            'analyze_road_accessibility' => $this->sectorService->analyzeRoadAccessibility($location),
             'analyze_agriculture' => $this->sectorService->analyzeAgriculture($location),
             'analyze_sti_laboratory_capacity' => $this->sectorService->analyzeStiLaboratoryCapacity($location),
-            'detect_development_gaps' => $this->prioritizationService->detectDevelopmentGaps(
-                $location,
-                isset($arguments['dimension']) ? (string) $arguments['dimension'] : null
-            ),
+            'analyze_safety_and_drrm' => $this->sectorService->analyzeSafetyAndDrrm($location),
+            'detect_development_gaps' => $this->prioritizationService->detectDevelopmentGaps($location),
             'calculate_priority_scores', 'identify_underserved_areas' => $location instanceof Municipality
-                ? $this->prioritizationService->calculatePriorityScores($location, (string) ($arguments['focus'] ?? 'general'))
+                ? $this->prioritizationService->calculatePriorityScores($location)
                 : ['error' => 'calculate_priority_scores requires a Municipality model.'],
             'get_local_dost_projects' => $this->dostCatalogService->getLocalDostProjects($location),
             default => throw new InvalidArgumentException("Unknown assessment function tool: {$toolName}"),
@@ -239,7 +227,7 @@ class AssessmentFunctionTools
      *
      * @return array<string, mixed>
      */
-    public function computeLocationBundle(Model $location, string $focus = 'general'): array
+    public function computeLocationBundle(Model $location): array
     {
         return [
             'dataset_audit' => $this->datasetService->getAvailableDatasets($location),
@@ -250,10 +238,12 @@ class AssessmentFunctionTools
                 'health' => $this->sectorService->analyzeHealthAccess($location),
                 'education' => $this->sectorService->analyzeEducationAccess($location),
                 'connectivity' => $this->sectorService->analyzeDigitalConnectivity($location),
+                'road_accessibility' => $this->sectorService->analyzeRoadAccessibility($location),
                 'agriculture' => $this->sectorService->analyzeAgriculture($location),
                 'sti_laboratory' => $this->sectorService->analyzeStiLaboratoryCapacity($location),
+                'safety_and_drrm' => $this->sectorService->analyzeSafetyAndDrrm($location),
             ],
-            'detected_gaps' => $this->prioritizationService->detectDevelopmentGaps($location, $focus),
+            'detected_gaps' => $this->prioritizationService->detectDevelopmentGaps($location),
             'local_dost_projects' => $this->dostCatalogService->getLocalDostProjects($location),
         ];
     }

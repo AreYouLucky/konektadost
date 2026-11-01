@@ -42,7 +42,7 @@ class MapAssessmentReport
             default => Barangay::query()->find($scope->id),
         };
         $profile = $locationModel !== null ? app(MunicipalityProfileService::class)->getMunicipalityProfile($locationModel) : null;
-        $functionToolsBundle = $locationModel !== null ? app(AssessmentFunctionTools::class)->computeLocationBundle($locationModel, $focus) : null;
+        $functionToolsBundle = $locationModel !== null ? app(AssessmentFunctionTools::class)->computeLocationBundle($locationModel) : null;
         $barangayAssessment = $locationModel instanceof Municipality
             ? app(PrioritizationService::class)->calculatePriorityScores($locationModel, $focus)
             : null;
