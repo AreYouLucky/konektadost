@@ -77,6 +77,11 @@ class PlaceDescription extends Model
         return self::$latestReleaseId ??= (int) static::query()->max('release_id');
     }
 
+    public static function flushLatestReleaseCache(): void
+    {
+        self::$latestReleaseId = null;
+    }
+
     /**
      * Population figures recorded for this place, one per collection year.
      *

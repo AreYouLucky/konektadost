@@ -1,6 +1,3 @@
-import AssessmentCharts from '@/components/assessment-charts';
-import AssessmentPlanning from '@/components/assessment-planning';
-import DataBars from '@/components/data-bars';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,10 +6,8 @@ import { Label } from '@/components/ui/label';
 import AppSidebarLayout from '@/layouts/app/app-sidebar-layout';
 import AppSidebarLayoutAdmin from '@/layouts/app/app-sidebar-layout-admin';
 import { evidenceState, type ProjectCatalogData } from '@/lib/assessment-planning';
-import PopulationDetails from '@/pages/admin/search-map/partials/population-details';
 import { AgricultureSummaryView } from '@/pages/admin/search-map/partials/province-agriculture-card';
 import ProvinceResourceOverview from '@/pages/admin/search-map/partials/province-resource-overview';
-import TechnologyDetails from '@/pages/admin/search-map/partials/technology-details';
 import type { AgricultureSummary } from '@/pages/admin/search-map/use-province-agriculture';
 import type { ProvinceResourceData } from '@/pages/admin/search-map/use-province-resources';
 import { Head, Link, router } from '@inertiajs/react';
@@ -21,12 +16,8 @@ import {
     AlertTriangle,
     ArrowLeft,
     Building2,
-    CheckCircle2,
-    Cpu,
     FlaskConical,
     Info,
-    Layers,
-    Lightbulb,
     MapPin,
     Search,
     Users,
@@ -73,6 +64,8 @@ interface BarangayItem {
     total_facilities_count: number;
     priority_level: 'high' | 'moderate' | 'covered' | 'unmeasured';
     priority_reason: string;
+    priority_score?: number | null;
+    nearest_facility_km?: number | null;
 }
 
 interface BarangayAssessmentSummary {
@@ -147,6 +140,51 @@ interface BarangayClassificationCounts {
     rural_barangays: number;
 }
 
+interface DatasetAuditItem {
+    key: string;
+    label: string;
+    table: string;
+    status: 'available' | 'partial' | 'empty' | 'unavailable';
+    local_records: number | null;
+    national_records: number | null;
+    barangays_represented?: number | null;
+    total_barangays?: number | null;
+    unmapped_local_records?: number | null;
+    reference_year: string | number | null;
+    notes: string;
+}
+
+interface LocalDostProjectItem {
+    id: number;
+    agency: string | null;
+    program: string | null;
+    project_title: string | null;
+    sector: string | null;
+    location: string | null;
+    raw_status: string | null;
+    normalized_status: string;
+    budget_php: number | null;
+}
+
+interface FunctionToolsBundle {
+    dataset_audit?: {
+        summary: {
+            available_count: number;
+            partial_count: number;
+            empty_count?: number;
+            unavailable_count: number;
+            total_datasets: number;
+        };
+        datasets: Record<string, DatasetAuditItem>;
+    };
+    local_dost_projects?: {
+        total_matched_projects: number;
+        total_recorded_budget_php: number;
+        by_agency: Record<string, number>;
+        projects: LocalDostProjectItem[];
+    };
+}
+
 interface AssessmentPageProps {
     location: {
         psg_code: string | null;
@@ -171,6 +209,7 @@ interface AssessmentPageProps {
     };
     localLaboratories?: LocalLaboratoryItem[];
     dostInterventions?: DostInterventionItem[];
+    functionToolsBundle?: FunctionToolsBundle | null;
     /** Collection year every population figure on this page belongs to. */
     populationYear?: number | null;
     populationReason?: string | null;
@@ -181,7 +220,7 @@ interface AssessmentPageProps {
     projectCatalog?: ProjectCatalogData;
 }
 
-type ActiveSection = 'all' | 'indicators' | 'barangays' | 'labs' | 'techs' | 'resources';
+type ActiveSection = 'indicators' | 'barangays' | 'resources';
 
 export default function LocationAssessment({
     location,
@@ -190,31 +229,26 @@ export default function LocationAssessment({
     results,
     barangayAssessment,
     localLaboratories = [],
-    dostInterventions = [],
+    functionToolsBundle = null,
     populationYear = null,
     populationReason = null,
     assessmentParams,
     mapReturnUrl,
     resourceSummary,
     agricultureSummary,
-    projectCatalog,
 }: AssessmentPageProps) {
-    const [activeSection, setActiveSection] = useState<ActiveSection>('all');
+    const [activeSection, setActiveSection] = useState<ActiveSection>('indicators');
 
     const focusLabel = dimensions.find((d) => d.key === focus)?.label ?? 'General assessment';
     const focusSupported = focus === 'general' || dimensions.find((d) => d.key === focus)?.supported;
 
     const shortfalls = results.filter((r) => evidenceState(r) === 'priority');
-    const catalog = projectCatalog ?? {
-        status: dostInterventions.length ? ('available' as const) : ('unavailable' as const),
-        source: 'DOST catalog entries returned with this assessment',
-        coverage: 'NCR reference catalog. Confirm applicability, eligibility, availability and local deployment with DOST.',
-        records: dostInterventions,
-    };
+    const measuredCount = results.filter((r) => evidenceState(r) !== 'missing').length;
 
     const backParams = location.province_psg_code ? { province: location.province_psg_code, city: location.psg_code } : { city: location.psg_code };
 
     const barangayCount = barangayAssessment?.barangays.length ?? 0;
+    const highPriorityBarangayCount = barangayAssessment?.summary.high_priority_count ?? 0;
     const Layout = mapReturnUrl ? AppSidebarLayoutAdmin : AppSidebarLayout;
 
     return (
@@ -237,13 +271,13 @@ export default function LocationAssessment({
                             </span>
                             <div>
                                 <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase">
-                                    Local evidence &amp; project planning
+                                    Deterministic Location &amp; Sector Assessment
                                 </p>
                                 <h1 className="mt-1 text-2xl font-semibold tracking-tight text-[#123575] sm:text-3xl dark:text-blue-200">
                                     {location.name} Assessment
                                 </h1>
-                                <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-500">
-                                    Review service comparisons, data readiness and DOST catalog options for local feasibility assessment.
+                                <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-500">
+                                    Computed indicators, dynamic national benchmark comparisons, barangay priority breakdowns, and local resource inventories.
                                 </p>
                             </div>
                         </div>
@@ -260,93 +294,75 @@ export default function LocationAssessment({
                 />
                 {populationReason && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{populationReason}</p>}
 
-                {/* Section Navigation Tabs */}
+                {/* Clean 3-Tab Data & Computation Strip */}
                 <nav
-                    aria-label="Assessment sections"
-                    className="flex flex-wrap items-center gap-2 rounded-2xl border border-blue-100 bg-white p-3 dark:bg-slate-950"
+                    aria-label="Assessment steps"
+                    className="grid grid-cols-1 gap-3 sm:grid-cols-3"
                 >
-                    <Button
+                    <button
                         type="button"
-                        size="sm"
-                        variant={activeSection === 'all' ? 'default' : 'outline'}
-                        onClick={() => setActiveSection('all')}
-                        className="gap-1.5"
-                    >
-                        <Layers className="size-3.5" />
-                        <span>All Sections</span>
-                    </Button>
-
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant={activeSection === 'indicators' ? 'default' : 'outline'}
                         onClick={() => setActiveSection('indicators')}
-                        className="gap-1.5"
+                        className={`flex flex-col gap-1.5 rounded-2xl border p-4 text-left transition-all ${
+                            activeSection === 'indicators'
+                                ? 'border-[#123575] bg-[#123575] text-white shadow-md'
+                                : 'border-blue-100 bg-white hover:border-blue-300 dark:border-slate-800 dark:bg-slate-950'
+                        }`}
                     >
-                        <Activity className="size-3.5" />
-                        <span>Location indicators</span>
-                        <Badge variant="secondary" className="ml-0.5 px-1.5 py-0 text-[10px]">
-                            {results.length}
-                        </Badge>
-                    </Button>
+                        <div className="flex items-center justify-between text-xs font-semibold tracking-wider uppercase opacity-80">
+                            <span>1 · Indicators &amp; Gaps</span>
+                            <Activity className="size-4" />
+                        </div>
+                        <div className="mt-1 flex items-baseline gap-2">
+                            <span className="text-2xl font-bold tabular-nums">{shortfalls.length}</span>
+                            <span className="text-xs opacity-85">shortfalls ({measuredCount} measured)</span>
+                        </div>
+                        <p className="text-xs opacity-75">Computed rates vs dynamic national benchmarks</p>
+                    </button>
 
-                    {barangayCount > 0 && (
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant={activeSection === 'barangays' ? 'default' : 'outline'}
-                            onClick={() => setActiveSection('barangays')}
-                            className="gap-1.5"
-                        >
-                            <MapPin className="size-3.5" />
-                            <span>2. Barangay Breakdown</span>
-                            <Badge variant="secondary" className="ml-0.5 px-1.5 py-0 text-[10px]">
-                                {barangayCount}
-                            </Badge>
-                        </Button>
-                    )}
-
-                    <Button
+                    <button
                         type="button"
-                        size="sm"
-                        variant={activeSection === 'labs' ? 'default' : 'outline'}
-                        onClick={() => setActiveSection('labs')}
-                        className="gap-1.5"
+                        onClick={() => setActiveSection('barangays')}
+                        disabled={barangayCount === 0}
+                        className={`flex flex-col gap-1.5 rounded-2xl border p-4 text-left transition-all disabled:opacity-50 ${
+                            activeSection === 'barangays'
+                                ? 'border-[#123575] bg-[#123575] text-white shadow-md'
+                                : 'border-blue-100 bg-white hover:border-blue-300 dark:border-slate-800 dark:bg-slate-950'
+                        }`}
                     >
-                        <FlaskConical className="size-3.5" />
-                        <span>3. DOST Laboratories</span>
-                        <Badge variant="secondary" className="ml-0.5 px-1.5 py-0 text-[10px]">
-                            {localLaboratories.length}
-                        </Badge>
-                    </Button>
+                        <div className="flex items-center justify-between text-xs font-semibold tracking-wider uppercase opacity-80">
+                            <span>2 · Priority Barangays</span>
+                            <MapPin className="size-4" />
+                        </div>
+                        <div className="mt-1 flex items-baseline gap-2">
+                            <span className="text-2xl font-bold tabular-nums">{highPriorityBarangayCount}</span>
+                            <span className="text-xs opacity-85">underserved of {barangayCount} brgys</span>
+                        </div>
+                        <p className="text-xs opacity-75">Population share, density &amp; facility deficits</p>
+                    </button>
 
-                    <Button
+                    <button
                         type="button"
-                        size="sm"
-                        variant={activeSection === 'techs' ? 'default' : 'outline'}
-                        onClick={() => setActiveSection('techs')}
-                        className={`gap-1.5 ${activeSection === 'techs' ? 'bg-[#123575] text-white hover:bg-[#0b2454]' : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200'}`}
+                        onClick={() => setActiveSection('resources')}
+                        className={`flex flex-col gap-1.5 rounded-2xl border p-4 text-left transition-all ${
+                            activeSection === 'resources'
+                                ? 'border-[#123575] bg-[#123575] text-white shadow-md'
+                                : 'border-blue-100 bg-white hover:border-blue-300 dark:border-slate-800 dark:bg-slate-950'
+                        }`}
                     >
-                        <Cpu className="size-3.5" />
-                        <span>Priorities &amp; DOST projects</span>
-                        <Badge variant="secondary" className="ml-0.5 px-1.5 py-0 text-[10px]">
-                            {catalog.records.length} catalog
-                        </Badge>
-                    </Button>
-                    {resourceSummary && (
-                        <Button
-                            type="button"
-                            variant={activeSection === 'resources' ? 'default' : 'outline'}
-                            className="w-fit"
-                            onClick={() => setActiveSection('resources')}
-                        >
-                            Population, facilities & agriculture
-                        </Button>
-                    )}
+                        <div className="flex items-center justify-between text-xs font-semibold tracking-wider uppercase opacity-80">
+                            <span>3 · Local Labs, Assets &amp; Agriculture</span>
+                            <FlaskConical className="size-4" />
+                        </div>
+                        <div className="mt-1 flex items-baseline gap-2">
+                            <span className="text-2xl font-bold tabular-nums">{localLaboratories.length}</span>
+                            <span className="text-xs opacity-85">accredited laboratories</span>
+                        </div>
+                        <p className="text-xs opacity-75">OneLab testing services, facilities &amp; agriculture</p>
+                    </button>
                 </nav>
 
-                {/* SECTION 1: City Indicators & Gaps */}
-                {(activeSection === 'all' || activeSection === 'indicators') && (
+                {/* TAB 1: Location Indicators & Benchmark Comparison */}
+                {activeSection === 'indicators' && (
                     <section
                         aria-labelledby="location-indicators-heading"
                         className="overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-[0_8px_32px_-12px_#1e3a8a29] dark:border-blue-900/60 dark:bg-slate-950"
@@ -355,19 +371,19 @@ export default function LocationAssessment({
                             <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[#123575] text-white sm:size-12">
                                 <Activity className="size-6" aria-hidden="true" />
                             </span>
-                            <div className="min-w-0 space-y-2">
+                            <div className="min-w-0 space-y-1">
                                 <Badge className="rounded-full bg-blue-100 px-2.5 text-[10px] font-semibold tracking-wider text-blue-800 uppercase dark:bg-blue-900/60 dark:text-blue-200">
-                                    Step 1
+                                    Computed Indicators
                                 </Badge>
                                 <h2
                                     id="location-indicators-heading"
                                     className="text-xl leading-snug font-semibold tracking-tight text-slate-900 sm:text-2xl dark:text-slate-100"
                                 >
-                                    Location Indicators &amp; Benchmark Comparison{' '}
+                                    Indicators &amp; Benchmark Comparison{' '}
                                     <span className="font-medium text-[#123575] dark:text-blue-200">({focusLabel})</span>
                                 </h2>
                                 <p className="text-muted-foreground max-w-3xl text-sm leading-relaxed">
-                                    How {location.name} compares against national reference rates across measured datasets.
+                                    Compares {location.name}’s measured rates against dynamically computed national reference rates.
                                 </p>
                             </div>
                         </header>
@@ -389,30 +405,23 @@ export default function LocationAssessment({
                                 </Card>
                             ) : (
                                 <div className="flex flex-col gap-5">
-                                    <AssessmentCharts
-                                        results={results}
-                                        dimensions={dimensions}
-                                        barangays={barangayAssessment?.barangays}
-                                        populationYear={populationYear}
-                                        populationBreakdown={resourceSummary?.population_breakdown}
-                                    />
                                     {shortfalls.length > 0 && (
-                                        <Card className="rounded-xl border-amber-200 bg-amber-50/60 shadow-sm dark:bg-amber-950/20">
+                                        <Card className="rounded-xl border-amber-200 bg-amber-50/70 shadow-sm dark:bg-amber-950/20">
                                             <CardHeader className="pb-2">
                                                 <CardTitle className="flex items-center gap-2 text-sm text-amber-900 dark:text-amber-200">
                                                     <AlertTriangle className="size-4 shrink-0 text-amber-600" />
-                                                    <span>High-confidence comparison flags for review</span>
+                                                    <span>Detected Indicator Shortfalls &amp; Pressures ({shortfalls.length})</span>
                                                 </CardTitle>
                                             </CardHeader>
                                             <CardContent className="grid gap-2 sm:grid-cols-2">
                                                 {shortfalls.map((result) => (
                                                     <div
                                                         key={result.key}
-                                                        className="bg-background/80 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200/60 px-3 py-2.5 text-xs"
+                                                        className="bg-background/90 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200/70 px-3 py-2.5 text-xs"
                                                     >
                                                         <span className="font-medium">{result.label}</span>
                                                         <span className="text-muted-foreground font-mono">
-                                                            {format(result.value)} vs {format(result.benchmark)} {result.unit}
+                                                            {format(result.value)} vs {format(result.benchmark)} ({result.unit})
                                                         </span>
                                                     </div>
                                                 ))}
@@ -420,44 +429,15 @@ export default function LocationAssessment({
                                         </Card>
                                     )}
 
-                                    <details className="rounded-xl border border-slate-200 p-4">
-                                        <summary className="cursor-pointer text-sm font-semibold text-[#123575]">
-                                            Detailed indicator evidence &amp; source notes ({results.length})
-                                        </summary>
-                                        <div className="mt-4 grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                            {results.map((result) => (
-                                                <IndicatorCard key={result.key} result={result} />
-                                            ))}
-                                        </div>
-                                    </details>
+                                    <UnifiedIndicatorsTable results={results} />
                                 </div>
                             )}
                         </div>
                     </section>
                 )}
 
-                {(activeSection === 'all' || activeSection === 'techs') && (
-                    <AssessmentPlanning
-                        locationName={location.name}
-                        results={results}
-                        catalog={catalog}
-                        agriculture={focus === 'general' ? agricultureSummary : undefined}
-                        locationMatches={dostInterventions}
-                    />
-                )}
-
-                {/* SECTION 2: Barangay Breakdown */}
-                {(activeSection === 'all' || activeSection === 'resources') && resourceSummary && (
-                    <section className="space-y-5">
-                        <h2 className="text-lg font-semibold">Population & local resource profile</h2>
-                        <div className="grid items-start gap-5 lg:grid-cols-2">
-                            <PopulationDetails data={resourceSummary} />
-                            <ProvinceResourceOverview data={resourceSummary} />
-                        </div>
-                        {agricultureSummary && <AgricultureSummaryView data={agricultureSummary} />}
-                    </section>
-                )}
-                {(activeSection === 'all' || activeSection === 'barangays') && barangayAssessment && barangayAssessment.barangays.length > 0 && (
+                {/* TAB 2: Barangay Breakdown */}
+                {activeSection === 'barangays' && barangayAssessment && barangayAssessment.barangays.length > 0 && (
                     <BarangayPrioritySection
                         cityName={location.name}
                         summary={barangayAssessment.summary}
@@ -466,50 +446,142 @@ export default function LocationAssessment({
                     />
                 )}
 
-                {/* SECTION 3: Accredited DOST Laboratories */}
-                {(activeSection === 'all' || activeSection === 'labs') && (
-                    <LocalLaboratoriesSection cityName={location.name} laboratories={localLaboratories} />
-                )}
+                {/* TAB 3: Accredited DOST Laboratories, Facilities, Dataset Audit & Local DOST Projects */}
+                {activeSection === 'resources' && (
+                    <div className="flex flex-col gap-6">
+                        {functionToolsBundle?.dataset_audit && (
+                            <DatasetAuditSection
+                                cityName={location.name}
+                                audit={functionToolsBundle.dataset_audit}
+                            />
+                        )}
 
-                {/* SECTION 4: Recommended DOST Technologies */}
-                {(activeSection === 'all' || activeSection === 'techs') && (
-                    <details className="space-y-5 rounded-2xl border border-blue-100 bg-white p-5 dark:bg-slate-950">
-                        <summary className="cursor-pointer font-semibold text-[#123575]">
-                            Catalog location context &amp; existing text matches ({dostInterventions.length})
-                        </summary>
-                        {resourceSummary && <TechnologyDetails data={resourceSummary} />}
-                        <DostInterventionsSection
-                            cityName={location.name}
-                            interventions={dostInterventions}
-                            priorityBarangays={barangayAssessment?.barangays.filter((b) => b.priority_level === 'high').slice(0, 5) ?? []}
-                        />
-                    </details>
+                        <LocalLaboratoriesSection cityName={location.name} laboratories={localLaboratories} />
+
+                        {functionToolsBundle?.local_dost_projects && (
+                            <LocalDostProjectsSection
+                                cityName={location.name}
+                                data={functionToolsBundle.local_dost_projects}
+                            />
+                        )}
+
+                        {resourceSummary && (
+                            <section className="space-y-4">
+                                <ProvinceResourceOverview data={resourceSummary} />
+                                {agricultureSummary && <AgricultureSummaryView data={agricultureSummary} />}
+                            </section>
+                        )}
+                    </div>
                 )}
 
                 <Card className="bg-muted/30">
                     <CardHeader className="pb-2">
-                        <CardTitle className="text-sm">Methodology & Data Notes</CardTitle>
+                        <CardTitle className="text-sm">Methodology &amp; Data Notes</CardTitle>
                     </CardHeader>
                     <CardContent className="text-muted-foreground flex flex-col gap-1.5 text-xs">
                         <p>
-                            <strong>Comparisons:</strong> National reference rates are descriptive benchmarks, not official service standards. Density
-                            above its reference signals service pressure; other indicators generally flag rates below their reference. Measurements,
-                            confidence and source notes are retained for every indicator.
+                            <strong>Comparisons:</strong> National reference rates are descriptive benchmarks computed dynamically from source tables,
+                            not official service standards. Density above its reference signals service pressure; other indicators flag rates below
+                            their reference.
                         </p>
                         <p>
                             <strong>Evidence limits:</strong> A recorded zero is not proof of absence. Unknown population and missing benchmarks
-                            remain distinct from zero. Inventories do not measure staffing, capacity, travel time, service quality or network
-                            coverage. Modeled agriculture is planning context outside scored indicators.
-                        </p>
-                        <p>
-                            <strong>Project screening:</strong> Options come from the existing NCR DOST reference catalog and are matched through
-                            explicit words in names, sectors and mechanisms. Matching does not verify suitability, local deployment, eligibility,
-                            funding or impact. Confirm these with the relevant DOST agency and LGU.
+                            remain distinct from zero. Modeled agriculture is planning context outside scored indicators.
                         </p>
                     </CardContent>
                 </Card>
             </div>
         </Layout>
+    );
+}
+
+function UnifiedIndicatorsTable({ results }: { results: AssessmentResult[] }) {
+    return (
+        <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+            <table className="w-full min-w-[740px] border-collapse text-left text-sm">
+                <thead>
+                    <tr className="bg-slate-50 text-xs tracking-wider text-slate-500 uppercase dark:bg-slate-900">
+                        <th className="px-4 py-3 font-medium">Indicator &amp; Source</th>
+                        <th className="px-4 py-3 text-right font-medium">Local Rate</th>
+                        <th className="px-4 py-3 text-right font-medium">National Rate</th>
+                        <th className="w-48 px-4 py-3 font-medium">Comparison</th>
+                        <th className="px-4 py-3 font-medium">Status &amp; Notes</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {results.map((row) => {
+                        const maxVal = Math.max(row.value ?? 0, row.benchmark ?? 0, 1);
+                        const localPct = row.value !== null ? Math.min(100, Math.round((row.value / maxVal) * 100)) : 0;
+                        const benchPct = row.benchmark !== null ? Math.min(100, Math.round((row.benchmark / maxVal) * 100)) : 0;
+
+                        return (
+                            <tr key={row.key} className="align-top hover:bg-slate-50/70 dark:hover:bg-slate-900/40">
+                                <td className="px-4 py-3.5">
+                                    <div className="font-semibold text-slate-900 dark:text-slate-100">{row.label}</div>
+                                    <div className="text-muted-foreground mt-0.5 text-xs">{row.description}</div>
+                                    <div className="text-muted-foreground mt-1 text-[11px]">
+                                        Unit: <span className="font-medium">{row.unit}</span> · Source: {row.source}
+                                    </div>
+                                </td>
+                                <td className="px-4 py-3.5 text-right font-mono text-base font-semibold tabular-nums">
+                                    {row.value === null ? (
+                                        <span className="text-muted-foreground text-xs font-normal">Unavailable</span>
+                                    ) : (
+                                        format(row.value)
+                                    )}
+                                </td>
+                                <td className="px-4 py-3.5 text-right font-mono text-sm text-slate-600 tabular-nums dark:text-slate-400">
+                                    {row.benchmark === null ? (
+                                        <span className="text-muted-foreground text-xs">No reference</span>
+                                    ) : (
+                                        format(row.benchmark)
+                                    )}
+                                </td>
+                                <td className="px-4 py-3.5">
+                                    {row.value !== null && row.benchmark !== null ? (
+                                        <div className="flex flex-col gap-1.5">
+                                            <div className="flex items-center justify-between text-xs">
+                                                <span className="text-muted-foreground">Gap</span>
+                                                <span
+                                                    className={`font-mono font-semibold ${
+                                                        row.is_shortfall
+                                                            ? 'text-amber-700 dark:text-amber-400'
+                                                            : 'text-[#123575] dark:text-blue-300'
+                                                    }`}
+                                                >
+                                                    {row.gap !== null ? `${row.gap > 0 ? '+' : ''}${row.gap.toFixed(1)}%` : '—'}
+                                                </span>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full" title="Local rate">
+                                                    <div
+                                                        className={`h-full rounded-full ${
+                                                            row.is_shortfall ? 'bg-amber-500' : 'bg-[#123575]'
+                                                        }`}
+                                                        style={{ width: `${localPct}%` }}
+                                                    />
+                                                </div>
+                                                <div className="bg-muted h-1 w-full overflow-hidden rounded-full" title="National reference rate">
+                                                    <div className="h-full rounded-full bg-slate-400" style={{ width: `${benchPct}%` }} />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <span className="text-muted-foreground text-xs">—</span>
+                                    )}
+                                </td>
+                                <td className="max-w-xs px-4 py-3.5">
+                                    <StatusBadge result={row} />
+                                    {row.reason && (
+                                        <p className="text-muted-foreground mt-1.5 text-xs leading-relaxed">{row.reason}</p>
+                                    )}
+                                </td>
+                            </tr>
+                        );
+                    })}
+                </tbody>
+            </table>
+        </div>
     );
 }
 
@@ -627,98 +699,6 @@ function LocationOverviewBar({
     );
 }
 
-function IndicatorCard({ result }: { result: AssessmentResult }) {
-    const unavailable = result.status === 'no_data' || result.value === null;
-    const accent = unavailable
-        ? 'border-t-slate-300 dark:border-t-slate-700'
-        : result.status === 'no_benchmark'
-          ? 'border-t-[#00aeef]'
-          : result.confidence === 'low'
-            ? 'border-t-slate-400'
-            : result.is_shortfall
-              ? 'border-t-amber-500'
-              : 'border-t-[#123575]';
-
-    return (
-        <Card className={`flex min-w-0 flex-col rounded-xl border-t-4 shadow-[0_4px_16px_-6px_#153d3824] ${accent}`}>
-            <CardHeader className="gap-3 p-4 pb-3 sm:p-5 sm:pb-3">
-                <CardTitle className="text-sm leading-snug">{result.label}</CardTitle>
-                <div className="flex flex-wrap gap-2">
-                    <StatusBadge result={result} />
-                </div>
-            </CardHeader>
-            <CardContent className="flex flex-1 flex-col gap-4 p-4 pt-0 sm:p-5 sm:pt-0">
-                {unavailable ? (
-                    <p className="text-muted-foreground text-sm">{result.reason || 'Not measured for this area.'}</p>
-                ) : (
-                    <>
-                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                            <span className="text-3xl font-semibold tracking-tight tabular-nums">{format(result.value)}</span>
-                            <span className="text-muted-foreground text-xs">{result.unit}</span>
-                        </div>
-
-                        {result.benchmark !== null && (
-                            <div className="bg-muted/50 flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs">
-                                <span className="text-muted-foreground">National rate: {format(result.benchmark)}</span>
-                                {result.gap !== null && (
-                                    <span
-                                        className={`font-mono font-medium ${
-                                            result.is_shortfall ? 'text-amber-700 dark:text-amber-400' : 'text-blue-900 dark:text-blue-200'
-                                        }`}
-                                    >
-                                        {result.gap > 0 ? '+' : ''}
-                                        {result.gap.toFixed(1)}%
-                                    </span>
-                                )}
-                            </div>
-                        )}
-
-                        {result.benchmark !== null && (
-                            <DataBars
-                                title="Measured vs national reference"
-                                description={result.unit}
-                                rows={[
-                                    {
-                                        label: 'Selected area',
-                                        value: result.value,
-                                        color: result.confidence === 'low' ? '#8255c8' : result.is_shortfall ? '#d97706' : '#138771',
-                                    },
-                                    { label: 'National reference', value: result.benchmark, color: '#94a3b8' },
-                                ]}
-                            />
-                        )}
-                        {result.median !== null && (
-                            <p className="text-muted-foreground text-xs">
-                                National median (context): {format(result.median)} {result.unit}
-                            </p>
-                        )}
-                    </>
-                )}
-
-                {result.reason !== '' && !unavailable && (
-                    <p
-                        className={`flex gap-2 text-xs ${result.confidence === 'low' ? 'text-amber-700 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`}
-                    >
-                        {result.confidence === 'low' ? (
-                            <AlertTriangle className="mt-0.5 size-3 shrink-0" />
-                        ) : (
-                            <Info className="mt-0.5 size-3 shrink-0" />
-                        )}
-                        {result.reason}
-                    </p>
-                )}
-
-                <div className="text-muted-foreground mt-auto border-t pt-3 text-[11px] leading-relaxed">
-                    <p>{result.description}</p>
-                    <p className="mt-1 opacity-80">Source: {result.source}</p>
-                    {result.basis_note && <p className="mt-1">{result.basis_note}</p>}
-                    {result.caveat && <p className="mt-1">{result.caveat}</p>}
-                </div>
-            </CardContent>
-        </Card>
-    );
-}
-
 function StatusBadge({ result }: { result: AssessmentResult }) {
     if (result.status === 'no_data') {
         return <Badge variant="secondary">No data</Badge>;
@@ -752,7 +732,7 @@ function BarangayPrioritySection({
 }) {
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState<'all' | 'high' | 'zero_facilities' | 'urban' | 'rural'>('all');
-    const [sortBy, setSortBy] = useState<'population_desc' | 'population_asc' | 'density_desc' | 'name_asc'>('population_desc');
+    const [sortBy, setSortBy] = useState<'priority_score_desc' | 'population_desc' | 'population_asc' | 'density_desc' | 'name_asc'>('priority_score_desc');
     const [visibleLimit, setVisibleLimit] = useState(20);
 
     const maxShare = useMemo(() => Math.max(...barangays.map((b) => b.population_share ?? 0), 1), [barangays]);
@@ -780,6 +760,9 @@ function BarangayPrioritySection({
         });
 
         return [...list].sort((a, b) => {
+            if (sortBy === 'priority_score_desc') {
+                return (b.priority_score ?? -1) - (a.priority_score ?? -1) || (b.population ?? -1) - (a.population ?? -1);
+            }
             if (sortBy === 'population_desc') {
                 return (b.population ?? -1) - (a.population ?? -1) || a.name.localeCompare(b.name);
             }
@@ -917,6 +900,7 @@ function BarangayPrioritySection({
                             onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
                             className="border-input focus-visible:ring-ring h-9 rounded-md border bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2"
                         >
+                            <option value="priority_score_desc">Sort: Priority Score (High → Low)</option>
                             <option value="population_desc">Sort: Population (High → Low)</option>
                             <option value="population_asc">Sort: Population (Low → High)</option>
                             <option value="density_desc">Sort: Density (High → Low)</option>
@@ -939,13 +923,14 @@ function BarangayPrioritySection({
                                     <th className="w-40 px-4 py-3 font-medium">Share of City</th>
                                     <th className="px-4 py-3 text-right font-medium">Density (/km²)</th>
                                     <th className="px-4 py-3 text-center font-medium">Recorded Infrastructure</th>
+                                    <th className="px-4 py-3 text-right font-medium">Priority Score</th>
                                     <th className="px-4 py-3 font-medium">Coverage Status</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y">
                                 {visibleBarangays.length === 0 ? (
                                     <tr>
-                                        <td colSpan={8} className="text-muted-foreground px-4 py-8 text-center text-sm">
+                                        <td colSpan={9} className="text-muted-foreground px-4 py-8 text-center text-sm">
                                             No barangays match the current search or filter.
                                         </td>
                                     </tr>
@@ -999,6 +984,11 @@ function BarangayPrioritySection({
                                                         <span className="text-muted-foreground">·</span>
                                                         <span title="Telecom cell towers">Towers: {brgy.telecom_sites_count ?? 0}</span>
                                                     </span>
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono font-semibold tabular-nums">
+                                                    {brgy.priority_score !== null && brgy.priority_score !== undefined
+                                                        ? `${brgy.priority_score.toFixed(1)} / 100`
+                                                        : '—'}
                                                 </td>
                                                 <td className="px-4 py-3">
                                                     <PriorityBadge level={brgy.priority_level} reason={brgy.priority_reason} />
@@ -1070,7 +1060,7 @@ function LocalLaboratoriesSection({ cityName, laboratories }: { cityName: string
             <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
                     <Badge variant="outline" className="font-mono text-xs">
-                        Step 3
+                        Step 4
                     </Badge>
                     <h2 className="text-lg font-semibold tracking-tight">DOST / OneLab Accredited Laboratories in {cityName}</h2>
                 </div>
@@ -1143,119 +1133,148 @@ function LocalLaboratoriesSection({ cityName, laboratories }: { cityName: string
     );
 }
 
-function DostInterventionsSection({
+function DatasetAuditSection({
     cityName,
-    interventions,
-    priorityBarangays,
+    audit,
 }: {
     cityName: string;
-    interventions: DostInterventionItem[];
-    priorityBarangays: BarangayItem[];
+    audit: NonNullable<FunctionToolsBundle['dataset_audit']>;
 }) {
-    const agencies = Array.from(new Set(interventions.map((t) => t.agency).filter(Boolean))) as string[];
-    const priorityPop = priorityBarangays.reduce((sum, b) => sum + (b.population ?? 0), 0);
+    const datasets = Object.values(audit.datasets);
 
     return (
-        <section className="flex flex-col gap-4 rounded-2xl border border-blue-100 bg-blue-50/60 p-4 shadow-sm sm:p-5 dark:border-blue-900 dark:bg-blue-950/20">
+        <section className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
                     <Badge variant="outline" className="font-mono text-xs">
-                        Step 4
+                        get_available_datasets
                     </Badge>
-                    <h2 className="text-lg font-semibold tracking-tight">Matched DOST Technologies & Programs ({cityName})</h2>
+                    <h2 className="text-lg font-semibold tracking-tight">Dataset Availability Audit ({cityName})</h2>
                 </div>
                 <p className="text-muted-foreground text-sm">
-                    Catalogued DOST technologies matched by location text or focus keywords, with lead agencies and catalog-stated outcomes.
+                    Live domain table coverage ({audit.summary.available_count} available · {audit.summary.partial_count} partial ·{' '}
+                    {audit.summary.empty_count ?? 0} empty · {audit.summary.unavailable_count} unavailable).
                 </p>
             </div>
 
-            {interventions.length === 0 ? (
+            <Card>
+                <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                        <table className="w-full border-collapse text-left text-xs">
+                            <thead>
+                                <tr className="bg-muted/40 text-muted-foreground border-b tracking-wider uppercase">
+                                    <th className="px-4 py-2.5 font-medium">Dataset &amp; Table</th>
+                                    <th className="px-4 py-2.5 font-medium">Status</th>
+                                    <th className="px-4 py-2.5 text-right font-medium">Local Records</th>
+                                    <th className="px-4 py-2.5 text-right font-medium">National Records</th>
+                                    <th className="px-4 py-2.5 font-medium">Reference / Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y">
+                                {datasets.map((ds) => (
+                                    <tr key={ds.key} className="hover:bg-muted/30">
+                                        <td className="px-4 py-2.5">
+                                            <div className="font-medium">{ds.label}</div>
+                                            <div className="text-muted-foreground font-mono text-[11px]">{ds.table}</div>
+                                        </td>
+                                        <td className="px-4 py-2.5">
+                                            <Badge
+                                                variant={ds.status === 'available' ? 'default' : ds.status === 'partial' ? 'outline' : 'secondary'}
+                                                className={ds.status === 'available' ? 'bg-[#123575]' : ''}
+                                            >
+                                                {ds.status}
+                                            </Badge>
+                                        </td>
+                                        <td className="px-4 py-2.5 text-right font-mono tabular-nums">
+                                            {ds.local_records !== null ? ds.local_records.toLocaleString() : '—'}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-right font-mono tabular-nums">
+                                            {ds.national_records !== null ? ds.national_records.toLocaleString() : '—'}
+                                        </td>
+                                        <td className="text-muted-foreground px-4 py-2.5">
+                                            {ds.reference_year ? `[${ds.reference_year}] ` : ''}
+                                            {ds.notes}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </CardContent>
+            </Card>
+        </section>
+    );
+}
+
+function LocalDostProjectsSection({
+    cityName,
+    data,
+}: {
+    cityName: string;
+    data: NonNullable<FunctionToolsBundle['local_dost_projects']>;
+}) {
+    return (
+        <section className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="font-mono text-xs">
+                        get_local_dost_projects
+                    </Badge>
+                    <h2 className="text-lg font-semibold tracking-tight">Recorded DOST Agency Projects ({cityName} / Province)</h2>
+                </div>
+                <p className="text-muted-foreground text-sm">
+                    {data.total_matched_projects} historical/ongoing DOST project records matched from <code>dost_projects</code>
+                    {data.total_recorded_budget_php > 0
+                        ? ` · Total recorded budget: ₱${data.total_recorded_budget_php.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+                        : ''}
+                    .
+                </p>
+            </div>
+
+            {data.projects.length === 0 ? (
                 <Card>
-                    <CardContent className="text-muted-foreground p-6 text-sm">No catalogued DOST technologies matched this filter.</CardContent>
+                    <CardContent className="text-muted-foreground p-5 text-sm">
+                        No location-matched project rows found in <code>dost_projects</code> for {cityName}.
+                    </CardContent>
                 </Card>
             ) : (
-                <>
-                    <div className="grid gap-4 md:grid-cols-2">
-                        <Card>
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-sm">Catalog agencies & areas to review</CardTitle>
-                            </CardHeader>
-                            <CardContent className="flex flex-col gap-2 text-sm">
-                                <div className="flex flex-wrap gap-1.5">
-                                    {agencies.map((agency) => (
-                                        <Badge key={agency} variant="secondary">
-                                            {agency}
-                                        </Badge>
+                <Card>
+                    <CardContent className="p-0">
+                        <div className="overflow-x-auto">
+                            <table className="w-full border-collapse text-left text-xs">
+                                <thead>
+                                    <tr className="bg-muted/40 text-muted-foreground border-b tracking-wider uppercase">
+                                        <th className="px-4 py-2.5 font-medium">Agency</th>
+                                        <th className="px-4 py-2.5 font-medium">Program &amp; Project Title</th>
+                                        <th className="px-4 py-2.5 font-medium">Location</th>
+                                        <th className="px-4 py-2.5 font-medium">Status</th>
+                                        <th className="px-4 py-2.5 text-right font-medium">Budget (PHP)</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y">
+                                    {data.projects.slice(0, 15).map((proj) => (
+                                        <tr key={proj.id} className="hover:bg-muted/30">
+                                            <td className="px-4 py-2.5 font-semibold">{proj.agency ?? '—'}</td>
+                                            <td className="px-4 py-2.5">
+                                                <div className="font-medium">{proj.project_title}</div>
+                                                {proj.program && <div className="text-muted-foreground text-[11px]">{proj.program}</div>}
+                                            </td>
+                                            <td className="text-muted-foreground px-4 py-2.5">{proj.location ?? '—'}</td>
+                                            <td className="px-4 py-2.5">
+                                                <Badge variant="outline">{proj.normalized_status}</Badge>
+                                            </td>
+                                            <td className="px-4 py-2.5 text-right font-mono tabular-nums">
+                                                {proj.budget_php !== null && proj.budget_php > 0
+                                                    ? `₱${proj.budget_php.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+                                                    : '—'}
+                                            </td>
+                                        </tr>
                                     ))}
-                                </div>
-                                {priorityBarangays.length > 0 && (
-                                    <p className="text-muted-foreground mt-1 text-xs">
-                                        <strong className="text-foreground">Barangays flagged by the recorded-coverage heuristic:</strong>{' '}
-                                        {priorityBarangays.map((b) => b.name).join(', ')} ({priorityPop.toLocaleString()} combined residents)
-                                    </p>
-                                )}
-                            </CardContent>
-                        </Card>
-
-                        <Card>
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-sm">Catalog matching notes</CardTitle>
-                            </CardHeader>
-                            <CardContent className="flex flex-col gap-2 text-sm">
-                                <p className="text-muted-foreground text-xs">
-                                    Entries are matched using catalog location text and focus keywords. Confirm local deployment, suitability,
-                                    eligibility and current availability with the lead agency. Resident counts do not predict program reach or impact.
-                                </p>
-                                <div className="flex items-center gap-2 text-xs text-blue-700 dark:text-blue-400">
-                                    <CheckCircle2 className="size-4 shrink-0" />
-                                    <span>{interventions.length} catalog entries matched</span>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2">
-                        {interventions.map((tech) => (
-                            <Card key={tech.id} className={tech.matches_city_cluster ? 'border-blue-500/50' : ''}>
-                                <CardHeader className="pb-2">
-                                    <div className="flex items-start justify-between gap-2">
-                                        <div className="flex items-center gap-2">
-                                            <Lightbulb className="size-4 shrink-0 text-blue-600" />
-                                            <CardTitle className="text-sm leading-snug">{tech.name}</CardTitle>
-                                        </div>
-                                        {tech.matches_city_cluster && <Badge className="shrink-0 bg-blue-600">Catalog location match</Badge>}
-                                    </div>
-                                    <div className="flex flex-wrap items-center gap-2 pt-1">
-                                        <span className="text-muted-foreground font-mono text-xs">{tech.code}</span>
-                                        {tech.agency && <Badge variant="outline">{tech.agency}</Badge>}
-                                        {tech.sector && <Badge variant="secondary">{tech.sector}</Badge>}
-                                        {tech.status && <span className="text-muted-foreground text-xs">· {tech.status}</span>}
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="flex flex-col gap-2 text-xs">
-                                    {tech.mechanism && (
-                                        <p>
-                                            <strong className="text-foreground">How it works: </strong>
-                                            <span className="text-muted-foreground">{tech.mechanism}</span>
-                                        </p>
-                                    )}
-                                    {tech.outcome && (
-                                        <p className="rounded-md bg-blue-50 p-2 text-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
-                                            <strong>Catalog-stated outcome: </strong>
-                                            {tech.outcome}
-                                        </p>
-                                    )}
-                                    {tech.deployment_clusters && (
-                                        <p className="text-muted-foreground border-t pt-2">
-                                            <strong>Catalog location text: </strong>
-                                            {tech.deployment_clusters}
-                                        </p>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </div>
-                </>
+                                </tbody>
+                            </table>
+                        </div>
+                    </CardContent>
+                </Card>
             )}
         </section>
     );

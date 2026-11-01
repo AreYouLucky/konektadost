@@ -11,10 +11,12 @@ use App\Models\Municipality;
 use App\Models\PlaceDescription;
 use App\Models\Province;
 use App\Models\TelecomSite;
+use App\Support\Assessment\AssessmentFunctionTools;
 use App\Support\Assessment\IndicatorCatalog;
 use App\Support\Assessment\IndicatorResult;
 use App\Support\Assessment\LocationAssessor;
 use App\Support\Assessment\MunicipalityProfileService;
+use App\Support\Assessment\PrioritizationService;
 use App\Support\Assessment\ProjectCatalog;
 use App\Support\Map\MapAssessmentReport;
 use Illuminate\Http\RedirectResponse;
@@ -106,7 +108,8 @@ class LocationController extends Controller
 
         $profile = app(MunicipalityProfileService::class)->getMunicipalityProfile($municipality);
         $cityPopulation = $profile['population_statistics']['population_current'] ?? $municipality->populationFigure?->population;
-        $barangayAssessment = $this->buildBarangayAssessment($municipality, $cityPopulation, $focus);
+        $barangayAssessment = app(PrioritizationService::class)->calculatePriorityScores($municipality, $focus);
+        $functionToolsBundle = app(AssessmentFunctionTools::class)->computeLocationBundle($municipality, $focus);
         $results = array_map(
             fn (IndicatorResult $result) => $result->toArray(),
             $assessor->assess($municipality, $focus)
@@ -128,6 +131,7 @@ class LocationController extends Controller
                 'population_statistics' => $profile['population_statistics'],
             ],
             'municipalityProfile' => $profile,
+            'functionToolsBundle' => $functionToolsBundle,
             // Which collection year every population figure above belongs to,
             // so the UI never labels a number with a year the data doesn't have.
             'populationYear' => CollectionYear::activeYear(),
@@ -433,10 +437,10 @@ class LocationController extends Controller
             $services = $hasLabServices
                 ? $lab->services
                     ->map(fn ($s) => [
-                        'test_name' => $s->test_name ?? $s->service_name ?? $s->name ?? 'Service',
-                        'method' => $s->method,
-                        'reference' => $s->reference,
-                        'fee' => $s->fee,
+                        'test_name' => $s->service_name ?? $s->test_name ?? $s->name ?? 'Service',
+                        'method' => $s->description ?? $s->method ?? null,
+                        'reference' => $s->reference ?? null,
+                        'fee' => $s->fee !== null ? (float) $s->fee : null,
                     ])
                     ->unique(fn ($s) => $s['test_name'].'|'.$s['method'])
                     ->values()

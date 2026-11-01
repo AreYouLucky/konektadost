@@ -19,6 +19,8 @@ class LabServices extends Model
      */
     protected $fillable = [
         'laboratory_id',
+        'service_name',
+        'description',
         'test_name',
         'method',
         'reference',

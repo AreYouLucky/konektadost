@@ -192,8 +192,8 @@ class LocationAssessor
             ->with('services')
             ->get()
             ->flatMap(fn ($lab) => $lab->services->map(fn ($service) => [
-                $service->test_name ?? $service->service_name ?? $service->name,
-                $service->method,
+                $service->service_name ?? $service->test_name ?? $service->name,
+                $service->description ?? $service->method ?? null,
             ]))
             ->unique()
             ->count();

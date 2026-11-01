@@ -5,8 +5,10 @@ namespace App\Support\Map;
 use App\Models\Barangay;
 use App\Models\Municipality;
 use App\Models\Province;
+use App\Support\Assessment\AssessmentFunctionTools;
 use App\Support\Assessment\IndicatorCatalog;
 use App\Support\Assessment\MunicipalityProfileService;
+use App\Support\Assessment\PrioritizationService;
 use App\Support\Assessment\ProjectCatalog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -40,6 +42,10 @@ class MapAssessmentReport
             default => Barangay::query()->find($scope->id),
         };
         $profile = $locationModel !== null ? app(MunicipalityProfileService::class)->getMunicipalityProfile($locationModel) : null;
+        $functionToolsBundle = $locationModel !== null ? app(AssessmentFunctionTools::class)->computeLocationBundle($locationModel, $focus) : null;
+        $barangayAssessment = $locationModel instanceof Municipality
+            ? app(PrioritizationService::class)->calculatePriorityScores($locationModel, $focus)
+            : null;
 
         return [
             'location' => [
@@ -56,6 +62,8 @@ class MapAssessmentReport
                 'population_statistics' => $profile['population_statistics'] ?? null,
             ],
             'municipalityProfile' => $profile,
+            'functionToolsBundle' => $functionToolsBundle,
+            'barangayAssessment' => $barangayAssessment,
             'populationYear' => $resources['population']['year'], 'populationReason' => $resources['population']['reason'],
             'focus' => $focus, 'dimensions' => IndicatorCatalog::dimensions(), 'results' => $results,
             'assessmentParams' => ['level' => $scope->level, 'location' => $scope->id],
@@ -72,15 +80,22 @@ class MapAssessmentReport
     {
         $labs = collect($resources['records'])->where('category', 'laboratory');
         $ids = $labs->map(fn ($row) => (int) substr($row['key'], strlen('laboratory:')));
-        $hasServices = Schema::hasColumns('lab_services', ['laboratory_id', 'test_name', 'method']);
+        $columns = Schema::hasTable('lab_services') ? Schema::getColumnListing('lab_services') : [];
+        $nameCol = in_array('service_name', $columns, true) ? 'service_name' : (in_array('test_name', $columns, true) ? 'test_name' : null);
+        $methodCol = in_array('description', $columns, true) ? 'description' : (in_array('method', $columns, true) ? 'method' : null);
+        $hasServices = in_array('laboratory_id', $columns, true) && $nameCol !== null;
+
         $services = $hasServices ? DB::table('lab_services')->whereIn('laboratory_id', $ids)
-            ->whereNotNull('test_name')->where('test_name', '<>', '')
-            ->get(array_values(array_intersect(Schema::getColumnListing('lab_services'), ['laboratory_id', 'test_name', 'method', 'reference', 'fee'])))
+            ->whereNotNull($nameCol)->where($nameCol, '<>', '')
+            ->get(array_values(array_intersect($columns, array_filter(['laboratory_id', $nameCol, $methodCol, 'reference', 'fee']))))
             ->groupBy('laboratory_id') : collect();
 
-        return $labs->map(function ($row) use ($hasServices, $services) {
+        return $labs->map(function ($row) use ($hasServices, $services, $nameCol, $methodCol) {
             $id = (int) substr($row['key'], strlen('laboratory:'));
-            $tests = $services->get($id, collect())->unique(fn ($test) => json_encode([$test->test_name, $test->method]))->values();
+            $tests = $services->get($id, collect())->unique(fn ($test) => json_encode([
+                $nameCol ? ($test->{$nameCol} ?? null) : null,
+                $methodCol ? ($test->{$methodCol} ?? null) : null,
+            ]))->values();
 
             return [
                 'id' => $id, 'agency_name' => $row['name'], 'code' => $row['metadata']['code'], 'city' => $row['municipality'],
@@ -88,7 +103,9 @@ class MapAssessmentReport
                 'total_services' => $hasServices ? $tests->count() : $row['metadata']['source_listed_service_count'],
                 'services_status' => $hasServices ? 'available' : 'unavailable',
                 'services' => $tests->take(12)->map(fn ($test) => [
-                    'test_name' => $test->test_name, 'method' => $test->method, 'reference' => $test->reference ?? null,
+                    'test_name' => $nameCol ? ($test->{$nameCol} ?? null) : null,
+                    'method' => $methodCol ? ($test->{$methodCol} ?? null) : null,
+                    'reference' => $test->reference ?? null,
                     'fee' => isset($test->fee) ? (float) $test->fee : null,
                 ])->all(),
             ];

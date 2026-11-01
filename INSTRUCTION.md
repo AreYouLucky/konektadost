@@ -1,469 +1,838 @@
-# Project Definition and System Implementation Instructions: konektaDOST
+# MASTER DEVELOPMENT INSTRUCTION
+## Project: konektaDOST – Geospatial Needs Assessment and DOST Intervention Planning Platform
 
-## 1. Project Overview
+### 1. Project Overview
 
-Develop and enhance **konektaDOST**, a geospatial intelligence and decision-support platform designed to help the Department of Science and Technology (DOST) identify local development needs, assess geographic conditions, and recommend appropriate Science, Technology, and Innovation (STI) interventions.
+You are working on **konektaDOST**, an evidence-based geospatial needs assessment and DOST intervention planning platform.
 
-The platform uses geographic information, demographic statistics, socioeconomic indicators, infrastructure data, environmental information, and the existing DOST technology inventory to understand the development situation of a selected municipality or locality.
-
-The ultimate purpose is to connect identified local needs with existing DOST technologies, programs, resources, and potential interventions.
-
-konektaDOST should function as a decision-support system, not merely a geographic visualization application or a chatbot.
-
-Its outputs must be evidence-based, geographically contextualized, measurable, explainable, and useful for development planning.
-
-## 2. Main System Objectives
+The purpose of the system is to help assess municipalities and their barangays using available geographic, demographic, infrastructure, economic, agricultural, environmental, and science and technology data.
 
 The system must be capable of:
 
-1. Assessing the demographic, geographic, socioeconomic, infrastructure, and environmental conditions of a selected municipality.
-2. Identifying development needs, deficiencies, risks, and opportunities using available datasets.
-3. Determining which barangays or geographic areas should receive greater attention based on measurable indicators.
-4. Identifying existing DOST technologies that may address the identified local development gaps.
-5. Evaluating the suitability and availability of potential technologies based on local conditions and implementation requirements.
-6. Generating proposed STI interventions supported by assessment findings.
-7. Identifying potential resources, implementing partners, and requirements for proposed interventions.
-8. Defining expected outcomes and measurable performance indicators.
-9. Presenting all findings through an interactive Intelligence Map and an executive assessment dashboard.
+1. Collecting and retrieving municipality-level and barangay-level information.
+2. Calculating measurable development indicators.
+3. Analyzing sectoral conditions.
+4. Identifying development gaps.
+5. Prioritizing barangays based on measurable needs.
+6. Finding relevant DOST programs, technologies, projects, and services.
+7. Matching identified needs with potential interventions.
+8. Evaluating intervention suitability and implementation feasibility.
+9. Generating structured intervention plans.
+10. Defining expected outcomes and performance indicators.
+11. Presenting consolidated assessment results for decision-makers.
 
-## 3. Core System Workflow
+The system must produce evidence-based findings. It must not invent statistics, development gaps, program availability, funding, partnerships, or project accomplishments.
 
-The platform must follow this logical workflow:
+---
 
-### Step 1: Select a Geographic Area
+### 2. Technology Stack
 
-Allow users to select a geographic location, initially focusing on municipalities and their corresponding barangays.
+The existing application uses:
 
-Retrieve the available geographic and demographic information associated with the selected location.
+**Backend**
+- Laravel 12
+- Eloquent ORM
+- MySQL/MariaDB-compatible database queries
 
-Expected information may include:
+**Frontend**
+- React
+- Inertia.js
+- TypeScript
+- Tailwind CSS
 
-- Province and municipality information.
-- Barangay information.
-- Geographic boundaries and land area.
-- Population and population trends.
+Follow the existing architecture, coding conventions, naming patterns, and component structure of the repository.
+
+Do not introduce a new framework or unnecessarily replace existing components.
+
+---
+
+### 3. Critical Development Rules
+
+These rules apply throughout the project.
+
+#### 3.1 Inspect Before Implementing
+
+Before writing or modifying code, inspect:
+
+- Existing Eloquent models.
+- Model relationships.
+- Model attributes, fillable properties, casts, scopes, and methods.
+- Existing database tables and columns.
+- Existing services and business logic.
+- Existing controllers and routes.
+- Existing API resources and response structures.
+- Existing frontend pages and components.
+- Existing GIS and map functionality.
+- Existing tests.
+
+Use the actual models and database structure as the source of truth.
+
+Do not assume that database migrations represent the current production schema. Existing migrations may be outdated.
+
+Do not create duplicate models, services, tables, relationships, or components when equivalent implementations already exist.
+
+#### 3.2 Preserve Existing Functionality
+
+The application already has geographic data, assessment functionality, and an Intelligence Map.
+
+Preserve and extend existing functionality.
+
+Do not rebuild the Intelligence Map or replace existing assessment services without a clear technical reason.
+
+Reuse existing services, particularly:
+- MunicipalityProfileService
+- LocationAssessor
+- Existing geographic and assessment-related services
+
+Inspect their actual implementations before extending them.
+
+#### 3.3 No AI Integration During Layers A–F
+
+IMPORTANT: The application currently does not have an AI endpoint.
+
+Do not:
+- Create an AI endpoint.
+- Call an external LLM API.
+- Add AI API keys or environment variables.
+- Introduce prompt engineering.
+- Add AI-related dependencies.
+- Use AI to calculate indicators.
+- Use AI to detect development gaps.
+- Use AI to generate intervention matches.
+
+All functionality in Layers A–F must use deterministic backend logic, database records, documented formulas, and configurable rules.
+
+AI-assisted interpretation, explanations, suggestions, and proposal generation will be implemented ONLY in the final project phase.
+
+Keep the architecture ready for future AI integration without making it a current dependency.
+
+#### 3.4 Data Integrity
+
+Always follow these principles:
+
+- Missing data is not zero.
+- Unknown does not mean unavailable.
+- Historical data is not necessarily current.
+- Estimated values are not verified values.
+- A facility record does not prove that a facility is operational.
+- A telecom tower does not prove household internet availability.
+- Road geometry does not prove road condition.
+- A historical DOST project does not prove current program availability.
+- A proposed intervention is not an approved project.
+- An estimated outcome is not an actual accomplishment.
+
+Preserve data provenance, reference dates, sources, geographic coverage, units, and methodology.
+
+#### 3.5 Coding Standards
+
+- Put business logic in services.
+- Keep controllers focused on request handling and response delivery.
+- Use Eloquent relationships appropriately.
+- Avoid N+1 queries.
+- Use pagination for large result sets.
+- Validate inputs.
+- Use database transactions when necessary.
+- Use structured JSON responses.
+- Maintain TypeScript interfaces for frontend data.
+- Add tests for calculations and important business rules.
+- Ensure database queries are compatible with the actual database version.
+- Avoid unrelated refactoring.
+
+---
+
+# 4. System Development Architecture
+
+Develop the system through six independent layers.
+
+## LAYER A – Municipality and Data Retrieval
+
+**Objective:** Retrieve and validate all available information for a selected municipality and its barangays.
+
+Implement the following capabilities:
+
+### A1. get_municipality_profile
+
+Retrieve:
+- Municipality name and PSGC code.
+- Province and region.
+- Municipality classification.
+- Income classification.
+- Urban/rural classification, if available.
+- Land area.
+- Geographic coordinates.
+- Total number of barangays.
+- Urban and rural barangay counts.
+- Population density, when calculable.
+
+Reuse MunicipalityProfileService.
+
+### A2. get_population_statistics
+
+Retrieve:
+- Municipality population.
+- Barangay population.
+- Historical population.
+- Latest available population record.
+- Absolute population growth.
+- Percentage population growth.
+- Annualized population growth.
 - Population density.
-- Available geographic and socioeconomic datasets.
 
-### Step 2: Gather and Analyze Available Data
+Always include reference years and data sources.
 
-Retrieve relevant datasets associated with the selected geographic area.
+Preserve historical population records.
 
-Potential data domains include:
+### A3. get_available_datasets
 
-- Population and demographics.
-- Health and public services.
-- Education and human capital.
-- Agriculture and food production.
-- Local economy and livelihood.
-- Infrastructure and transportation.
+Inventory datasets available for the municipality.
+
+Inspect existing datasets, including:
+
+- population_figures
+- facilities
+- laboratories
+- lab_services
+- telecom_sites
+- agriculture_count_estimates
+- dost_projects
+- dost_techs
+- technologies
+- roads, if implemented
+- other existing datasets
+
+For each dataset, return:
+- Dataset name.
+- Record count.
+- Number of barangays represented.
+- Reference year or date.
+- Source.
+- Geographic coverage.
+- Completeness.
+- Availability status.
+
+Use these statuses:
+- available
+- partial
+- unavailable
+
+Do not interpret zero records as proof that the dataset does not exist.
+
+### A4. get_local_assets
+
+Retrieve local assets and resources, grouped by sector and barangay.
+
+Include:
+- Health facilities.
+- Education facilities.
+- Laboratories and services.
+- Telecom infrastructure.
+- Agricultural resources.
+- Roads.
+- DOST projects.
+- Other available institutional resources.
+
+### A5. get_telecom_infrastructure
+
+Use the existing telecom_sites table.
+
+Retrieve:
+- Telecom site count.
+- Barangay distribution.
+- Operators and tower companies.
+- Recorded technologies.
+- Frequency bands.
+- Coordinates.
+- Colocated sites.
+- Source and verification dates.
+
+Inspect the actual data formats before parsing technologies and bands.
+
+Do not assume that stored LONGTEXT fields contain valid JSON.
+
+### A6. get_geographic_data_availability
+
+Inspect the availability of:
+- Municipality boundaries.
+- Barangay boundaries.
+- Barangay coordinates.
+- Facility coordinates.
+- Road geometries.
+- Telecom site coordinates.
+- Other geographic datasets.
+
+Do not duplicate existing geographic boundaries.
+
+**Layer A expected result:** A municipality data profile containing available datasets, local assets, geographic coverage, and data limitations.
+
+---
+
+## LAYER B – Domain Indicator and Sector Analysis
+
+**Objective:** Transform retrieved datasets into measurable indicators and sector assessments.
+
+### B1. calculate_indicators
+
+Create reusable indicator calculation services.
+
+Potential indicators:
+- Facilities per 100,000 population.
+- Facilities per barangay.
+- Road density per square kilometer.
+- Telecom sites per 10,000 population.
+- Agricultural production per hectare.
+- Laboratories per million population.
+
+Every indicator must contain:
+- Indicator name.
+- Observed value.
+- Unit.
+- Benchmark, if available.
+- Calculated gap, if applicable.
+- Reference year.
+- Source.
+- Confidence or data quality.
+
+Only compare compatible indicators and benchmarks.
+
+### B2. analyze_health_access
+
+Calculate:
+- Health facilities per 100,000 population.
+- Hospital count.
+- Health center count.
+- Pharmacy count, if available.
+- Barangays without verified facilities.
+- Distance to nearest health facility.
+- Population potentially affected by limited access.
+
+### B3. analyze_education_access
+
+Calculate:
+- Schools per 100,000 population.
+- Elementary school count.
+- Secondary school count.
+- School distribution by barangay.
+- Barangays without verified schools.
+- Distance to nearest school.
+
+### B4. analyze_digital_connectivity
+
+Calculate:
+- Total telecom sites.
+- Sites per 10,000 population.
+- Operators and tower companies.
+- Technology distribution.
+- Colocation rate.
+- Barangays with recorded sites.
+- Distance to nearest site.
+
+Clearly distinguish infrastructure presence from actual connectivity, coverage, and service quality.
+
+### B5. analyze_road_accessibility
+
+Calculate:
+- Total road length.
+- Road length by classification.
+- Road density.
+- Road length per capita.
+- Paved and unpaved road lengths.
+- Road condition, if available.
+- Road length by barangay.
+- Barangays with road access.
+- Distance to important facilities and centers.
+- Potentially isolated communities.
+
+If road geometry crosses multiple barangays, calculate the intersecting length for each barangay.
+
+Do not assign an entire road segment to only one barangay when it crosses multiple barangays.
+
+Use actual network distances when routing data is available. Label straight-line distances as approximate.
+
+Do not calculate geographic road length in meters directly from unprojected longitude and latitude coordinates.
+
+Verify MariaDB spatial compatibility before using spatial functions or indexes.
+
+### B6. analyze_agriculture
+
+Calculate:
+- Agricultural area.
+- Crop production.
+- Fisheries production.
+- Livestock and poultry.
+- Top commodities.
+- Production volume.
+- Revenue, cost, and net income, if available.
+
+Respect original units and estimation methods.
+
+### B7. analyze_sti_laboratory_capacity
+
+Calculate:
+- Laboratory count.
+- Accredited laboratories per million population.
+- Available services.
+- Free and paid services.
+- Laboratory distribution.
+- Distance to nearest laboratory.
+
+### B8. Additional sector analysis
+
+Prepare the architecture for future domains:
+- Population and social needs.
+- Economy and livelihood.
+- Environment and biodiversity.
+- Weather and climate.
+- Hazards and disaster risks.
+- Governance and public services.
+- Transport and logistics.
+- Science, technology, and innovation.
+
+Only implement calculations when the required data are available.
+
+**Layer B expected result:** A structured collection of measurable indicators and sector assessments.
+
+---
+
+## LAYER C – Gap Detection and Barangay Prioritization
+
+**Objective:** Identify measurable development gaps and determine barangays that require priority attention.
+
+### C1. detect_development_gaps
+
+Compare observed indicators against documented benchmarks.
+
+For every finding, return:
+- Gap description.
+- Observed value.
+- Benchmark.
+- Absolute gap.
+- Percentage gap, when valid.
+- Severity.
+- Affected population.
+- Affected barangays.
+- Reference year.
+- Source.
+- Confidence.
+
+If a benchmark does not exist, do not invent one.
+
+If information is missing, return insufficient information rather than declaring a development gap.
+
+### C2. identify_underserved_areas
+
+Identify barangays with verified development needs based on:
+- Health access.
+- Education access.
+- Road accessibility.
 - Digital connectivity.
-- Environment and natural hazards.
-- Science, technology, and innovation resources.
+- Agricultural resources.
+- Laboratory access.
+- Population.
+- Distance to facilities.
 
-The system must distinguish between available, missing, outdated, estimated, and insufficient data.
+Identify overlapping development needs without double-counting the same evidence.
 
-Do not assume that all datasets are available for every municipality.
+### C3. calculate_priority_scores
 
-### Step 3: Calculate Development Indicators
+Create a configurable priority scoring mechanism from 0 to 100.
 
-Use deterministic backend functions to calculate measurable indicators from available source data.
-
-Examples include:
-
-**Demographic indicators**
-- Population growth rate.
-- Population density.
-- Population distribution by barangay.
-- Population change over time.
-
-**Health indicators**
-- Health facilities per population.
-- Hospital distribution.
-- Geographic proximity to health facilities.
-- Potentially underserved areas.
-
-**Education indicators**
-- School distribution.
-- Educational facilities per population.
+Potential components:
+- Population and social needs.
+- Infrastructure gaps.
+- Health and education access.
+- Digital connectivity.
+- Economic and agricultural needs.
 - Geographic accessibility.
 
-**Agriculture and economic indicators**
-- Agricultural production trends.
-- Distribution of agricultural resources.
-- Available processing facilities.
-- Business establishment distribution.
-- Employment and livelihood indicators, when available.
+Weights must be configurable and documented.
 
-**Environmental and hazard indicators**
-- Population within mapped hazard zones.
-- Facilities exposed to identified hazards.
-- Geographic distribution of environmental risks.
+The scoring system must:
+- Normalize indicators.
+- Handle missing data.
+- Avoid double-counting correlated indicators.
+- Return component scores.
+- Explain the calculation methodology.
+- Record the scoring version.
 
-**Infrastructure indicators**
-- Road network distribution.
-- Connectivity and accessibility.
-- Distribution of essential public facilities.
+A high priority score represents greater assessed need. It does not automatically establish intervention suitability.
 
-Only calculate indicators when the required input data is available and suitable.
+**Layer C expected result:** Development findings, underserved barangays, and explainable priority scores.
 
-Every calculated indicator should preserve its source, reference period, geographic coverage, unit of measurement, and calculation methodology.
+---
 
-### Step 4: Identify Development Gaps and Opportunities
+## LAYER D – DOST Catalog and Project Retrieval
 
-Analyze the calculated indicators and available evidence to identify local development needs.
+**Objective:** Connect identified development needs with actual DOST programs, technologies, projects, and services.
 
-Examples:
+Reuse existing models:
+- DostTech
+- Technology
+- DostProject
 
-- Limited access to healthcare facilities.
-- Uneven distribution of educational facilities.
-- Insufficient agricultural processing infrastructure.
-- Potential exposure of communities and facilities to natural hazards.
-- Limited access to digital connectivity.
-- Areas with economic or livelihood development opportunities.
+Do not duplicate existing DOST data structures.
 
-Each identified gap must be represented as a structured assessment finding.
+### D1. search_dost_technologies
 
-An assessment finding should contain, when applicable:
+Search technologies by:
+- Sector.
+- Agency.
+- Keywords.
+- Problem addressed.
+- Application.
+- Objectives.
+- Beneficiaries.
+- Availability, if recorded.
 
-- Geographic location.
-- Development domain.
-- Identified problem or opportunity.
-- Supporting indicators.
-- Observed values.
-- Benchmark or comparison values.
-- Severity or priority classification.
-- Supporting data sources.
-- Data quality and limitations.
-- Explanation of how the finding was identified.
+### D2. get_local_dost_projects
 
-Do not generate development gaps based solely on generic assumptions or AI-generated statements.
+Retrieve historical and ongoing DOST projects based on:
+- Municipality.
+- Province.
+- Agency.
+- Program.
+- Sector.
+- Project title.
+- Project dates.
+- Status.
+- Budget, if recorded.
+- Accomplishments, if available.
 
-### Step 5: Determine Geographic Priority Areas
+Distinguish historical projects from currently available programs.
 
-Identify barangays or geographic locations that require attention based on the assessment findings.
+Do not assume historical project participation guarantees future funding or eligibility.
 
-The system should be able to:
+**Layer D expected result:** A searchable collection of DOST programs, technologies, services, and historical projects.
 
-- Compare indicators between barangays.
-- Identify underserved or vulnerable areas.
-- Calculate configurable priority scores.
-- Identify populations and facilities potentially affected.
-- Display priority areas through the Intelligence Map.
+---
 
-Priority scoring must use documented criteria, normalized indicators where appropriate, and configurable weights.
+## LAYER E – Intervention Matching and Feasibility
 
-The system must explain the basis of every priority classification.
+**Objective:** Match identified development gaps with potential DOST interventions and assess their suitability.
 
-Do not interpret a high score as an objective measure without documenting its methodology.
+IMPORTANT: This layer must use deterministic rule-based logic only. No AI integration.
 
-### Step 6: Match Identified Needs with DOST Technologies
+### E1. match_dost_interventions
 
-This is one of the central functions of konektaDOST.
-
-The system must connect identified development gaps with the existing DOST technology inventory.
-
-Use structured technology information, including:
-
-- Technology name.
-- Technology description.
+Match development gaps against:
+- Sector alignment.
+- Program objectives.
 - Technology applications.
-- Problems addressed by the technology.
-- Target industries and beneficiaries.
-- Expected benefits.
-- Technical requirements.
-- Infrastructure requirements.
-- Implementation requirements.
-- Availability status (`tech_status`).
+- Intended beneficiaries.
+- Geographic suitability.
+- Local assets.
+- Previous projects.
+- Program availability.
 
-Technology matching must consider:
-
-1. Relevance to the identified development gap.
-2. Alignment with the technology's documented applications.
-3. Suitability for the affected population or industry.
-4. Compatibility with local geographic and infrastructure conditions.
-5. Availability for adoption or deployment.
-6. Required resources, skills, utilities, and technical support.
-
-Use the following `tech_status` values:
-
-- `available`
-- `limited`
-- `unavailable`
-- `discontinued`
-- `unknown`
-
-Interpret these statuses correctly:
-
-- `available`: Eligible for normal matching.
-- `limited`: May be recommended with availability restrictions clearly identified.
-- `unavailable`: Exclude from actionable deployment recommendations.
-- `discontinued`: Exclude from current recommendations.
-- `unknown`: May be considered a potential candidate but requires verification.
-
-Do not assume that a technology is deployable merely because its description matches a development problem.
-
-The matching engine must explain why a technology is considered suitable or unsuitable.
-
-### Step 7: Assess Intervention Feasibility
-
-After identifying potential technology matches, assess whether the municipality can realistically implement the proposed intervention.
-
-Consider:
-
-- Technology availability.
-- Required infrastructure.
-- Local utilities.
-- Workforce and technical skills.
-- Potential beneficiaries.
-- Required equipment and facilities.
-- Estimated investment requirements, when reliable cost information exists.
-- Potential implementing agencies and institutional partners.
-- Operational and maintenance requirements.
-
-Classify feasibility based on documented evidence.
-
-Where requirements are unknown, flag them for validation rather than assuming they are satisfied.
-
-### Step 8: Generate Recommended Interventions
-
-Convert validated assessment findings and technology matches into proposed STI interventions.
-
-Each recommendation should contain:
-
-- Intervention title.
+Return:
 - Identified development gap.
-- Target geographic location.
-- Supporting assessment findings.
-- Matched DOST technology, when applicable.
-- Rationale for the recommendation.
+- Matched program or technology ID.
+- Relevance score.
+- Matching criteria.
+- Evidence.
+- Intended beneficiaries.
+- Availability verification status.
+
+One gap may have multiple possible matches.
+
+Do not force matches when no suitable intervention exists.
+
+### E2. assess_intervention_suitability
+
+Evaluate:
+- Relevance to identified needs.
 - Target beneficiaries.
-- Proposed implementation activities.
-- Required resources and infrastructure.
-- Potential implementing partners.
-- Estimated timeline, when supported.
+- Local resources.
+- Infrastructure.
+- Geographic suitability.
+- Program requirements.
+- Existing capabilities.
+
+### E3. assess_implementation_feasibility
+
+Evaluate:
+- Infrastructure.
+- Utilities.
+- Personnel.
+- Skills.
+- Funding.
+- Maintenance capacity.
+- Institutional partners.
+- Eligibility.
+- Geographic accessibility.
+- Program availability.
+
+Return one of:
+- feasible
+- conditionally_feasible
+- not_yet_feasible
+- insufficient_information
+
+Unknown essential requirements must prevent the system from declaring an intervention feasible.
+
+### E4. identify_implementation_partners
+
+Identify potential partners using verified records.
+
+Potential partners:
+- DOST agencies.
+- LGUs.
+- State universities and colleges.
+- Research institutions.
+- Private organizations.
+- Cooperatives.
+- Enterprises.
+
+Do not invent partnerships or commitments.
+
+### E5. estimate_intervention_requirements
+
+Identify:
+- Equipment.
+- Facilities.
+- Personnel.
+- Expertise.
+- Training.
+- Utilities.
+- Infrastructure.
+- Funding.
+- Maintenance.
+- Institutional partners.
+
+Do not invent costs. Mark missing financial estimates as pending.
+
+**Layer E expected result:** Evidence-backed intervention matches, suitability results, feasibility assessments, potential partners, and resource requirements.
+
+---
+
+## LAYER F – Intervention Planning and Outcomes
+
+**Objective:** Produce structured intervention proposals with measurable objectives, resources, and expected outcomes.
+
+This layer must initially use deterministic backend logic and structured templates.
+
+### F1. generate_intervention_plan
+
+Generate a structured plan containing:
+- Intervention title.
+- Identified development issue.
+- Supporting evidence.
+- Municipality and barangays.
+- Target beneficiaries.
+- Proposed DOST intervention.
+- Activities.
+- Required resources.
+- Potential partners.
 - Expected outputs.
 - Expected outcomes.
-- Performance indicators.
-- Assumptions and limitations.
+- Risks.
+- Assumptions.
+- Verification requirements.
 
-Recommendations may involve technology adoption, technology transfer, technical assistance, capacity development, research collaboration, infrastructure support, or other appropriate STI interventions.
+Clearly label plans as proposals pending human validation and approval.
 
-Do not force every development gap to have a matching DOST technology. When no suitable technology exists, identify the gap and indicate that further assessment, research, or alternative intervention is needed.
+### F2. define_performance_indicators
 
-### Step 9: Define Expected Outcomes and Performance Indicators
+Define KPIs with:
+- Indicator name.
+- Category.
+- Baseline.
+- Target.
+- Unit.
+- Measurement method.
+- Reporting frequency.
+- Data source.
+- Actual accomplishment.
 
-For every proposed intervention, identify how its implementation and effectiveness can be measured.
+Possible indicators:
+- Enterprises assisted.
+- Technologies deployed.
+- Individuals trained.
+- Production capacity.
+- Processing efficiency.
+- Barangays covered.
+- Laboratory service capacity.
 
-Examples:
+### F3. estimate_intervention_outcomes
 
-- Number of beneficiaries served.
-- Number of trained personnel.
-- Number of facilities established or improved.
-- Increase in production or processing capacity.
-- Reduction in post-harvest losses.
-- Improvement in geographic accessibility.
-- Number of technology adopters.
-- Improvement in service delivery.
+Estimate outcomes only when sufficient evidence exists.
 
-Distinguish between:
+Include:
+- Baseline.
+- Target.
+- Estimation method.
+- Assumptions.
+- Confidence.
+- Limitations.
 
-- Baseline values.
-- Proposed targets.
-- Actual implementation results.
-- Estimated outcomes.
+Clearly distinguish estimates from actual accomplishments.
 
-Never present a projected outcome as an already achieved result.
+### F4. generate_assessment_summary
 
-### Step 10: Present Results Through the Dashboard and Intelligence Map
+Generate a structured summary using actual outputs from Layers A–F.
 
-The system must present assessment results in a clear, interactive, and executive-friendly interface.
-
-The dashboard should include:
-
-**A. Municipality Overview**
-- Population.
-- Land area.
-- Population density.
-- Population growth.
-- Geographic profile.
-- Available dataset coverage.
-
-**B. Development Assessment**
-- Identified development gaps.
-- Assessment findings by domain.
-- Important indicators and comparisons.
-- Data quality and missing information.
-
-**C. Geographic Priorities**
+Include:
+- Municipality profile.
+- Development indicators.
+- Critical gaps.
 - Priority barangays.
-- Underserved or vulnerable areas.
-- Geographic distribution of development gaps.
-- Affected populations and facilities, when measurable.
+- Potential DOST interventions.
+- Feasibility results.
+- Resource requirements.
+- Expected outcomes.
 
-**D. DOST Technology Matching**
-- Number of relevant technology candidates.
-- Technology match results.
-- Availability status.
-- Suitability and feasibility assessment.
-- Reasons for matching and limitations.
+Do not use an LLM to generate the summary at this stage.
 
-**E. Recommended Interventions**
-- Prioritized proposed interventions.
-- Supporting evidence.
-- Target locations and beneficiaries.
-- Implementation requirements.
-- Potential partners.
-- Expected outputs and outcomes.
+**Layer F expected result:** Structured intervention proposals, performance indicators, expected outcomes, and consolidated assessment results.
 
-**F. Performance and Monitoring**
-- Baseline indicators.
-- Proposed targets.
-- Actual results when available.
-- Progress and performance comparisons.
+---
 
-## 4. Intelligence Map Requirements
+# 5. Database Considerations
 
-The existing Intelligence Map is an important part of the platform and must be preserved.
+Before creating tables, inspect the actual database.
 
-Enhance its analytical capabilities where necessary.
+Potential structures, only if equivalent structures do not already exist:
 
-It should support:
+- assessments
+- assessment_indicators
+- assessment_findings
+- barangay_priority_scores
+- technology_matches
+- intervention_recommendations
+- intervention_requirements
+- intervention_performance_indicators
+- intervention_outcomes
 
-- Geographic selection.
-- Municipality and barangay boundaries.
-- Population distribution.
-- Public facility locations.
-- Infrastructure layers.
-- Hazard and environmental layers.
-- Identified development gaps.
-- Geographic priority areas.
-- Recommended intervention locations.
+Preserve historical assessments.
 
-Users should be able to select a location or map feature and inspect its relevant assessment information.
+Store:
+- Assessment date.
+- Municipality.
+- Reference datasets.
+- Calculation methodology version.
+- Scoring configuration.
+- Source references.
+- Assessment status.
 
-Map visualizations must be based on actual geographic datasets and computed results.
+Do not recompute historical assessments simply because the dashboard is opened.
 
-Do not display fabricated geographic information or assume that missing geographic records mean that no facilities or risks exist.
+---
 
-## 5. Role of Artificial Intelligence
+# 6. Intelligence Map Integration
 
-AI should function as an analytical assistant and recommendation engine.
+The existing Intelligence Map must be preserved.
 
-It should not replace deterministic statistical calculations or act as the source of factual data.
+Extend it to support available assessment layers, such as:
 
-Use backend services to:
+- Population.
+- Health facilities.
+- Education facilities.
+- Roads.
+- Telecom sites.
+- Agriculture.
+- Laboratories.
+- Development gaps.
+- Priority barangays.
+- Historical DOST projects.
+- Proposed interventions.
 
-- Retrieve structured data.
-- Calculate indicators.
-- Identify development gaps.
-- Compute priority scores.
-- Search and match DOST technologies.
-- Evaluate implementation requirements.
+Do not rebuild the map from scratch.
 
-Use AI to:
+Use existing map components and GIS functionality wherever possible.
 
-- Interpret assessment findings.
-- Explain development gaps in understandable language.
-- Explain why technologies match identified needs.
-- Identify missing information and assumptions.
-- Compare intervention options.
-- Generate proposed intervention plans.
-- Summarize assessment results for decision-makers.
+Map layers must only display data supported by actual geographic records.
 
-AI-generated conclusions must be grounded in retrieved data and backend computation results.
+---
 
-The AI must never invent population values, facility counts, technology availability, costs, implementation partners, or performance results.
+# 7. Executive Outputs
 
-If evidence is insufficient, the AI must explicitly state that the information is insufficient.
+The completed platform must provide five primary executive outputs:
 
-## 6. Function Tool Architecture
+1. **Priority Areas** – Municipalities and barangays requiring development attention.
+2. **Critical Needs and Development Gaps** – Measurable gaps across sectors.
+3. **Recommended DOST Interventions** – Potential programs, technologies, and services matched to local needs.
+4. **Investment and Resource Priorities** – Required resources, infrastructure, personnel, expertise, and funding.
+5. **Expected Outcomes and Performance** – KPIs, targets, estimated outcomes, and actual accomplishments.
 
-Organize backend functionality into reusable services or tools.
+All outputs must be traceable to underlying data and assessment results.
 
-Suggested functions include:
+---
 
-**Municipality and Data Retrieval**
-- `get_municipality_profile`
-- `get_population_statistics`
-- `get_local_assets`
-- `get_available_datasets`
+# 8. Final AI Integration Phase
 
-**Statistical and Geographic Analysis**
-- `calculate_indicators`
-- `analyze_health_access`
-- `analyze_education_access`
-- `analyze_agriculture`
-- `analyze_hazard_exposure`
-- `analyze_digital_connectivity`
-- `identify_underserved_areas`
+AI integration must be developed only after Layers A–F are implemented, tested, and reviewed.
 
-**Assessment and Prioritization**
-- `detect_development_gaps`
-- `get_assessment_findings`
-- `calculate_priority_scores`
+Potential future capabilities:
+- Natural-language interpretation of assessment results.
+- Explanation of development gaps.
+- AI-assisted intervention suggestions.
+- Drafting intervention proposals.
+- Executive summaries.
+- Strategic insights.
 
-**DOST Technology Matching**
-- `search_dost_technologies`
-- `match_technology_to_needs`
-- `check_technology_availability`
-- `assess_implementation_feasibility`
+The future AI service must consume structured and verified backend outputs.
 
-**Intervention Planning**
-- `generate_intervention_options`
-- `estimate_intervention_requirements`
-- `identify_implementation_partners`
-- `generate_action_plan`
-- `define_performance_indicators`
+It must not replace deterministic calculations or invent evidence.
 
-**Assessment Reporting**
-- `generate_assessment_summary`
-- `get_dashboard_results`
-- `get_intervention_outcomes`
+Human review must remain part of the recommendation and approval process.
 
-These are logical function names. Reuse existing implementations wherever possible and avoid creating duplicate services that perform the same operation.
+---
 
-## 7. Important Architectural Principles
+# 9. Implementation Workflow
 
-1. Keep raw source data separate from calculated assessment results.
-2. Keep calculated results separate from AI-generated interpretations.
-3. Preserve data provenance and reference dates.
-4. Use existing geographic relationships and identifiers.
-5. Support municipality-level and barangay-level analysis where data permits.
-6. Allow datasets to have different reference years.
-7. Do not treat missing data as zero.
-8. Do not treat estimated or proxy values as verified observations.
-9. Make assessment formulas and priority scoring rules transparent.
-10. Preserve assessment history so that results can be compared over time.
-11. Preserve the existing Intelligence Map and its working integrations.
-12. Avoid unnecessary changes to existing models and database relationships.
-13. Make technology matching explainable and traceable.
-14. Require appropriate human validation before recommendations become approved implementation plans.
+Do not implement the entire architecture in one operation.
 
-## 8. Expected System Output
+Follow this exact development sequence:
 
-The final system should be capable of producing a comprehensive municipality-level development assessment with five major executive outputs:
+1. Layer A – Municipality and Data Retrieval.
+2. Layer B – Domain Indicator and Sector Analysis.
+3. Layer C – Gap Detection and Barangay Prioritization.
+4. Layer D – DOST Catalog and Project Retrieval.
+5. Layer E – Intervention Matching and Feasibility.
+6. Layer F – Intervention Planning and Outcomes.
+7. Final Phase – AI Integration.
 
-1. **Priority Areas** – Where should attention and resources be directed?
-2. **Critical Needs and Development Gaps** – What problems or opportunities have been identified, and what evidence supports them?
-3. **Recommended STI Interventions** – Which DOST technologies, programs, and interventions could address these needs?
-4. **Investment and Resource Priorities** – What resources, infrastructure, expertise, and partnerships are required?
-5. **Expected Outcomes and Performance** – What measurable results should be achieved, and how will progress be evaluated?
+For EACH layer, follow this workflow:
 
-The platform should help DOST and local government decision-makers understand not only what is happening in a municipality, but also where intervention is needed, which available technologies could help, why those technologies are suitable, and what results their implementation is expected to produce.
+**Step 1 – Audit**
+Inspect existing code, models, tables, relationships, services, routes, and frontend integration.
 
-## 9. Implementation Direction
+**Step 2 – Gap Analysis**
+Identify what already exists, what needs extension, and what is genuinely missing.
 
-Before implementing new functionality:
+**Step 3 – Implementation Plan**
+Present the proposed files, methods, changes, database modifications, and expected outputs.
 
-1. Inspect the existing Laravel Models and their relationships.
-2. Review the existing Intelligence Map implementation and its data flow.
-3. Identify existing reusable services, controllers, APIs, and computations.
-4. Evaluate whether the existing database structure can support the required outputs.
-5. Identify only the missing structures and functionality.
-6. Present the proposed implementation approach before making substantial changes.
-7. Implement incrementally without breaking existing functionality.
+**Step 4 – Wait for Approval**
+Do not start implementation until the proposed plan has been reviewed and approved.
 
-Prioritize a complete municipality assessment workflow over implementing many disconnected dashboard widgets.
+**Step 5 – Implementation**
+Implement only the approved scope.
 
-The goal is a functioning evidence-to-intervention decision-support platform, not simply a dashboard containing statistical cards and AI-generated recommendations.
+**Step 6 – Testing**
+Run relevant tests and verify actual database results.
+
+**Step 7 – Completion Report**
+Report:
+- Files created.
+- Files modified.
+- Existing components reused.
+- Database changes.
+- Implemented functionality.
+- Tests performed and results.
+- Known limitations.
+- Remaining tasks.
+
+**Step 8 – Stop**
+Do not automatically proceed to the next layer. Wait for explicit instructions.
+
+---
+
+# 10. Initial Instruction
+
+Start with **Layer A – Municipality and Data Retrieval ONLY**.
+
+Do not implement Layer B or any subsequent layer.
+
+First, audit the existing application and identify which Layer A capabilities already exist.
+
+Pay particular

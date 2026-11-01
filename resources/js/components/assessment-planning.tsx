@@ -1,4 +1,3 @@
-import DataBars from '@/components/data-bars';
 import {
     evidenceState,
     matchProjects,
@@ -45,8 +44,6 @@ export default function AssessmentPlanning({
                   locationMatches.filter((row) => row.matches_city_cluster).map((row) => row.id),
               )
             : [];
-    const sectors = new Map<string, number>();
-    for (const { project } of projects) sectors.set(project.sector || 'Unclassified', (sectors.get(project.sector || 'Unclassified') ?? 0) + 1);
     return (
         <section aria-labelledby="assessment-planning-heading" className="space-y-5">
             <header className="flex items-start gap-3">
@@ -142,27 +139,6 @@ export default function AssessmentPlanning({
                         </ul>
                     </details>
                 )}
-            </div>
-
-            <div className="grid items-start gap-4 xl:grid-cols-2">
-                <div className={surface}>
-                    <DataBars
-                        title="Planning themes by evidence basis"
-                        description="Counts themes that trigger catalog screening, not affected residents or project impact. Agriculture is modeled context outside the scored assessment."
-                        rows={(Object.keys(basisLabels) as (keyof typeof basisLabels)[]).map((key) => ({
-                            label: basisLabels[key],
-                            value: topics.filter((topic) => topic.basis === key).length,
-                            color: key === 'comparison' ? '#d97706' : key === 'provisional' ? '#64748b' : '#123575',
-                        }))}
-                    />
-                </div>
-                <div className={surface}>
-                    <DataBars
-                        title="Screened catalog options by sector"
-                        description="Each matching catalog entry is counted once. More entries do not mean greater suitability or availability."
-                        rows={[...sectors].sort((a, b) => b[1] - a[1]).map(([label, value]) => ({ label, value, color: '#00aeef' }))}
-                    />
-                </div>
             </div>
 
             <div className={surface}>

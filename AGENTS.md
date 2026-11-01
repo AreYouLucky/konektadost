@@ -28,11 +28,15 @@ Work strictly with the **17 models** in `app/Models/` (`Benchmark`, `EvidenceSou
 - **Step 1 (Completed):**
   - PHP 8.5 compatibility fixed in `config/database.php`.
   - Removed deleted model references (`PsgcRelease`, `Benchmark`) and added dynamic table-computed benchmarks in `LocationAssessor.php`.
-  - Implemented `app/Support/Assessment/MunicipalityProfileService.php` (`getMunicipalityProfile` & `getPopulationStatistics`) and wired it into `LocationController.php`, `MapAssessmentReport.php`, and `resources/js/pages/location-assessment.tsx`.
-- **Step 2 (Next):**
-  - Fix `LabServices.php` & `MapAssessmentReport.php` to read `service_name` and `description` from `lab_services`.
-  - Implement Dataset Availability Audit (`get_local_assets` / `get_available_datasets`) and expand domain indicators (Agriculture, Population Growth, Facility Proximity).
-- **Step 3:** Structured Development Gaps & Barangay Priority Scoring (`PrioritizationService`).
-- **Step 4:** Unified DOST Technology & Project Matching (`DostProject` + `DostTech` + `Technology`) with `tech_status` rules and Feasibility Assessment.
-- **Step 5:** Action Plan Generator, Investment Priorities, and Expected Outcomes & Performance Indicators.
+  - Implemented `app/Support/Assessment/MunicipalityProfileService.php` (`get_municipality_profile` & `get_population_statistics`) and wired it into `LocationController.php`, `MapAssessmentReport.php`, and `resources/js/pages/location-assessment.tsx`.
+- **Steps 2–4 (Completed — Deterministic Function Tools Across 4 Layers):**
+  - Fixed `LabServices.php`, `LocationAssessor.php`, `LocationController.php`, and `MapAssessmentReport.php` to read `service_name` and `description` from `lab_services`.
+  - **Layer A (`DatasetAndAssetService.php`):** `get_available_datasets` and `get_local_assets`.
+  - **Layer B (`SectorAnalysisService.php`):** `analyze_health_access`, `analyze_education_access`, `analyze_digital_connectivity`, `analyze_agriculture`, and `analyze_sti_laboratory_capacity` (with Haversine proximity distances in `km`).
+  - **Layer C (`PrioritizationService.php`):** `detect_development_gaps` (severity 0–100) and `calculate_priority_scores` / `identify_underserved_areas` (barangay composite priority score 0–100 across population, density, facility deficits, and isolation).
+  - **Layer D (`DostCatalogToolService.php`):** `search_dost_technologies` and `get_local_dost_projects` across `DostTech`, `Technology`, and `DostProject` (with normalized `tech_status`, handling `"comleted"`).
+  - **Central Registry (`AssessmentFunctionTools.php`):** Exposes all 14 Function Tool schemas (`definitions()`), dispatcher (`execute()`), and location bundle (`computeLocationBundle()`).
+  - Removed static frontend `AssessmentPlanning` assumptions from `resources/js/pages/location-assessment.tsx` so the UI displays pure computed data and indicators across 3 clean tabs.
+- **Next (Final Step — AI Summarization & Intervention Engine):**
+  - Connect the AI / LLM layer at the end of the workflow to consume the 14 deterministic Function Tools and generate the 5 Executive Outputs.
 
