@@ -122,3 +122,4 @@ class AnalyzeSafetyAndDrrmTool implements FunctionToolInterface
         ];
     }
 }
+

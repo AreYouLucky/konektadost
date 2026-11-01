@@ -247,3 +247,4 @@ class AnalyzeAgricultureTool implements FunctionToolInterface
         ];
     }
 }
+

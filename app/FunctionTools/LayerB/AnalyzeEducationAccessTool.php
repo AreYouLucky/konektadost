@@ -124,3 +124,4 @@ class AnalyzeEducationAccessTool implements FunctionToolInterface
         ];
     }
 }
+

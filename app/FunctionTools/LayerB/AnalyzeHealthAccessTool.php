@@ -127,3 +127,4 @@ class AnalyzeHealthAccessTool implements FunctionToolInterface
         ];
     }
 }
+

@@ -175,3 +175,4 @@ class AnalyzeStiLaboratoryCapacityTool implements FunctionToolInterface
         ];
     }
 }
+

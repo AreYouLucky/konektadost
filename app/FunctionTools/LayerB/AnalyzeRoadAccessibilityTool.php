@@ -246,3 +246,4 @@ class AnalyzeRoadAccessibilityTool implements FunctionToolInterface
         ];
     }
 }
+

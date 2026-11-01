@@ -157,3 +157,4 @@ class CalculateIndicatorsTool implements FunctionToolInterface
         ];
     }
 }
+
