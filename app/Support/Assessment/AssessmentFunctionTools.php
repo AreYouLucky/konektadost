@@ -267,6 +267,7 @@ class AssessmentFunctionTools
             'underserved_areas' => $location instanceof Municipality ? $this->prioritizationService->identifyUnderservedAreas($location) : null,
             'priority_scores' => $location instanceof Municipality ? $this->prioritizationService->calculatePriorityScores($location) : null,
             'local_dost_projects' => $this->dostCatalogService->getLocalDostProjects($location),
+            'dost_technologies' => $this->dostCatalogService->searchDostTechnologies(['limit' => 30]),
             'matched_interventions' => $location instanceof Municipality ? app(\App\FunctionTools\LayerE\MatchDostInterventionsTool::class)->execute(['municipality_id' => $location->id]) : null,
             'action_plan' => $location instanceof Municipality ? app(\App\FunctionTools\LayerF\GenerateActionPlanTool::class)->execute(['municipality_id' => $location->id]) : null,
         ];

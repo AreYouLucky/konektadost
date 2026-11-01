@@ -235,6 +235,10 @@ interface FunctionToolsBundle {
         by_agency: Record<string, number>;
         projects: LocalDostProjectItem[];
     };
+    dost_technologies?: {
+        total_matches?: number;
+        results?: any[];
+    };
     matched_interventions?: any;
 }
 
@@ -559,15 +563,14 @@ export default function LocationAssessment({
                 {/* TAB 4: DOST Track Record & Catalog (Layer D) */}
                 {activeSection === 'dost_catalog' && (
                     <div className="flex flex-col gap-6">
-                        {functionToolsBundle?.local_dost_projects && (
-                            <LocalDostProjectsSection
-                                cityName={location.name}
-                                data={functionToolsBundle.local_dost_projects}
-                            />
-                        )}
+                        <LocalDostProjectsSection
+                            cityName={location.name}
+                            data={functionToolsBundle?.local_dost_projects}
+                        />
 
                         <DostTechnologiesCatalogSection
                             dostInterventions={dostInterventions}
+                            catalogTechnologies={functionToolsBundle?.dost_technologies?.results}
                             projectCatalog={projectCatalog}
                         />
                     </div>
@@ -1296,27 +1299,49 @@ function LocalDostProjectsSection({
     data,
 }: {
     cityName: string;
-    data: NonNullable<FunctionToolsBundle['local_dost_projects']>;
+    data?: any;
 }) {
+    if (!data) {
+        return (
+            <Card>
+                <CardHeader className="pb-2">
+                    <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="font-mono text-xs">
+                            Layer D · get_local_dost_projects
+                        </Badge>
+                        <CardTitle className="text-sm font-semibold">Recorded DOST Agency Projects ({cityName})</CardTitle>
+                    </div>
+                </CardHeader>
+                <CardContent className="text-muted-foreground p-5 text-sm">
+                    No historical or ongoing DOST projects data recorded in <code>dost_projects</code> for this locality.
+                </CardContent>
+            </Card>
+        );
+    }
+
+    const projects: LocalDostProjectItem[] = Array.isArray(data?.projects) ? data.projects : [];
+    const totalMatched = Number(data?.total_matched_projects ?? projects.length ?? 0);
+    const totalBudget = Number(data?.total_recorded_budget_php ?? 0);
+
     return (
         <section className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
                     <Badge variant="outline" className="font-mono text-xs">
-                        get_local_dost_projects
+                        Layer D · get_local_dost_projects
                     </Badge>
                     <h2 className="text-lg font-semibold tracking-tight">Recorded DOST Agency Projects ({cityName} / Province)</h2>
                 </div>
                 <p className="text-muted-foreground text-sm">
-                    {data.total_matched_projects} historical/ongoing DOST project records matched from <code>dost_projects</code>
-                    {data.total_recorded_budget_php > 0
-                        ? ` · Total recorded budget: ₱${data.total_recorded_budget_php.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+                    {totalMatched} historical/ongoing DOST project records matched from <code>dost_projects</code>
+                    {totalBudget > 0
+                        ? ` · Total recorded budget: ₱${totalBudget.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
                         : ''}
                     .
                 </p>
             </div>
 
-            {data.projects.length === 0 ? (
+            {projects.length === 0 ? (
                 <Card>
                     <CardContent className="text-muted-foreground p-5 text-sm">
                         No location-matched project rows found in <code>dost_projects</code> for {cityName}.
@@ -1337,20 +1362,20 @@ function LocalDostProjectsSection({
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y">
-                                    {data.projects.slice(0, 15).map((proj) => (
-                                        <tr key={proj.id} className="hover:bg-muted/30">
+                                    {projects.slice(0, 15).map((proj, idx) => (
+                                        <tr key={proj.id ?? idx} className="hover:bg-muted/30">
                                             <td className="px-4 py-2.5 font-semibold">{proj.agency ?? '—'}</td>
                                             <td className="px-4 py-2.5">
-                                                <div className="font-medium">{proj.project_title}</div>
+                                                <div className="font-medium">{proj.project_title || 'Untitled Project'}</div>
                                                 {proj.program && <div className="text-muted-foreground text-[11px]">{proj.program}</div>}
                                             </td>
                                             <td className="text-muted-foreground px-4 py-2.5">{proj.location ?? '—'}</td>
                                             <td className="px-4 py-2.5">
-                                                <Badge variant="outline">{proj.normalized_status}</Badge>
+                                                <Badge variant="outline">{proj.normalized_status || proj.raw_status || 'Recorded'}</Badge>
                                             </td>
                                             <td className="px-4 py-2.5 text-right font-mono tabular-nums">
-                                                {proj.budget_php !== null && proj.budget_php > 0
-                                                    ? `₱${proj.budget_php.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+                                                {proj.budget_php !== null && proj.budget_php !== undefined && Number(proj.budget_php) > 0
+                                                    ? `₱${Number(proj.budget_php).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
                                                     : '—'}
                                             </td>
                                         </tr>
@@ -1531,12 +1556,33 @@ function RoadAccessibilityCard({
 }: {
     roadAccessibility?: any;
 }) {
-    if (!roadAccessibility) return null;
+    if (!roadAccessibility) {
+        return (
+            <Card className="border-blue-100 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
+                <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Navigation className="size-4 text-teal-600" />
+                            <CardTitle className="text-sm font-semibold">Road Network &amp; Logistics Accessibility</CardTitle>
+                        </div>
+                        <Badge variant="outline" className="font-mono text-[10px]">
+                            Layer B · analyze_road_accessibility
+                        </Badge>
+                    </div>
+                </CardHeader>
+                <CardContent className="p-4 text-xs text-muted-foreground">
+                    Road accessibility analysis data is not available.
+                </CardContent>
+            </Card>
+        );
+    }
 
     const summary = roadAccessibility?.summary ?? {};
     const totalSegments = Number(summary.total_road_segments ?? roadAccessibility?.total_segments ?? 0);
     const totalKm = Number(summary.total_road_length_km ?? roadAccessibility?.total_length_km ?? 0);
     const roadDensity = summary.road_density_km_per_km2 ?? roadAccessibility?.road_density_km_per_km2 ?? null;
+    const coverage = roadAccessibility?.barangay_coverage;
+    const reason = roadAccessibility?.reason;
 
     const bySurface: any[] = Array.isArray(roadAccessibility?.by_surface_type)
         ? roadAccessibility.by_surface_type
@@ -1547,7 +1593,7 @@ function RoadAccessibilityCard({
         .reduce((sum: number, s: any) => sum + Number(s.segments || 0), 0);
 
     const pavedPct = totalSegments > 0 ? Math.round((pavedSegments / totalSegments) * 100) : 0;
-    const unpavedPct = Math.max(0, 100 - pavedPct);
+    const unpavedPct = totalSegments > 0 ? Math.max(0, 100 - pavedPct) : 0;
 
     return (
         <Card className="border-blue-100 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
@@ -1563,55 +1609,73 @@ function RoadAccessibilityCard({
                 </div>
             </CardHeader>
             <CardContent className="flex flex-col gap-4 text-xs">
-                <div className="grid grid-cols-3 gap-3 text-center border-b pb-3 dark:border-slate-800">
-                    <div>
-                        <div className="text-muted-foreground text-[10px] uppercase">Total Segments</div>
-                        <div className="text-base font-bold font-mono text-slate-900 dark:text-white">
-                            {totalSegments.toLocaleString()}
-                        </div>
+                {totalSegments === 0 ? (
+                    <div className="rounded-lg bg-amber-50 p-3 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+                        <p className="font-medium">0 Road Segments Recorded</p>
+                        <p className="text-[11px] mt-1 opacity-90">
+                            {reason || 'No road network segments recorded for this locality in the database.'}
+                        </p>
                     </div>
-                    <div>
-                        <div className="text-muted-foreground text-[10px] uppercase">Network Length</div>
-                        <div className="text-base font-bold font-mono text-slate-900 dark:text-white">
-                            {totalKm.toFixed(1)} km
+                ) : (
+                    <>
+                        <div className="grid grid-cols-3 gap-3 text-center border-b pb-3 dark:border-slate-800">
+                            <div>
+                                <div className="text-muted-foreground text-[10px] uppercase">Total Segments</div>
+                                <div className="text-base font-bold font-mono text-slate-900 dark:text-white">
+                                    {totalSegments.toLocaleString()}
+                                </div>
+                            </div>
+                            <div>
+                                <div className="text-muted-foreground text-[10px] uppercase">Network Length</div>
+                                <div className="text-base font-bold font-mono text-slate-900 dark:text-white">
+                                    {totalKm.toFixed(1)} km
+                                </div>
+                            </div>
+                            <div>
+                                <div className="text-muted-foreground text-[10px] uppercase">Road Density</div>
+                                <div className="text-base font-bold font-mono text-slate-900 dark:text-white">
+                                    {roadDensity !== null ? `${Number(roadDensity).toFixed(2)} km/km²` : '—'}
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                    <div>
-                        <div className="text-muted-foreground text-[10px] uppercase">Road Density</div>
-                        <div className="text-base font-bold font-mono text-slate-900 dark:text-white">
-                            {roadDensity !== null ? `${Number(roadDensity).toFixed(2)} km/km²` : '—'}
-                        </div>
-                    </div>
-                </div>
 
-                {/* Paved vs Unpaved Visual Bar */}
-                <div className="flex flex-col gap-1.5">
-                    <div className="flex justify-between text-[11px] font-medium">
-                        <span className="text-teal-700 dark:text-teal-400">Paved (Concrete/Asphalt): {pavedPct}%</span>
-                        <span className="text-amber-700 dark:text-amber-400">Unpaved (Gravel/Earth): {unpavedPct}%</span>
-                    </div>
-                    <div className="bg-amber-200 h-2 w-full overflow-hidden rounded-full dark:bg-amber-900/40">
-                        <div
-                            className="bg-teal-600 h-full rounded-full transition-all"
-                            style={{ width: `${pavedPct}%` }}
-                        />
-                    </div>
-                    <p className="text-muted-foreground text-[10px]">
-                        {pavedPct >= 50
-                            ? 'Adequate paved road connectivity supports physical DOST equipment hauling.'
-                            : 'Substantial unpaved roads may require 4x4 transport or dry-season scheduling.'}
-                    </p>
-                </div>
+                        {/* Paved vs Unpaved Visual Bar */}
+                        <div className="flex flex-col gap-1.5">
+                            <div className="flex justify-between text-[11px] font-medium">
+                                <span className="text-teal-700 dark:text-teal-400">Paved (Concrete/Asphalt): {pavedPct}%</span>
+                                <span className="text-amber-700 dark:text-amber-400">Unpaved (Gravel/Earth): {unpavedPct}%</span>
+                            </div>
+                            <div className="bg-amber-200 h-2 w-full overflow-hidden rounded-full dark:bg-amber-900/40">
+                                <div
+                                    className="bg-teal-600 h-full rounded-full transition-all"
+                                    style={{ width: `${pavedPct}%` }}
+                                />
+                            </div>
+                            <p className="text-muted-foreground text-[10px]">
+                                {pavedPct >= 50
+                                    ? 'Adequate paved road connectivity supports physical DOST equipment hauling.'
+                                    : 'Substantial unpaved roads may require 4x4 transport or dry-season scheduling.'}
+                            </p>
+                        </div>
 
-                {/* Surface Breakdown Chips */}
-                {bySurface.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                        {bySurface.map((s: any, idx: number) => (
-                            <Badge key={idx} variant="secondary" className="text-[10px] font-normal capitalize">
-                                {s.surface_type || 'Unclassified'}: {s.segments ?? 0} segments ({s.length_km ?? 0} km)
-                            </Badge>
-                        ))}
-                    </div>
+                        {/* Surface Breakdown Chips */}
+                        {bySurface.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 pt-1">
+                                {bySurface.map((s: any, idx: number) => (
+                                    <Badge key={idx} variant="secondary" className="text-[10px] font-normal capitalize">
+                                        {s.surface_type || 'Unclassified'}: {s.segments ?? 0} segments ({s.length_km ?? 0} km)
+                                    </Badge>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Barangay Coverage if available */}
+                        {coverage && (
+                            <div className="border-t pt-2 text-[11px] text-muted-foreground dark:border-slate-800">
+                                Barangay Accessibility: <strong className="text-slate-800 dark:text-slate-200">{coverage.coverage_pct ?? 0}%</strong> ({coverage.barangays_with_roads ?? 0} of {coverage.total_barangays ?? 0} barangays with road access)
+                            </div>
+                        )}
+                    </>
                 )}
             </CardContent>
         </Card>
@@ -1627,7 +1691,26 @@ function TelecomConnectivityCard({
 }: {
     telecom?: any;
 }) {
-    if (!telecom) return null;
+    if (!telecom) {
+        return (
+            <Card className="border-blue-100 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
+                <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Radio className="size-4 text-orange-600" />
+                            <CardTitle className="text-sm font-semibold">Digital Telecom &amp; Cellular Infrastructure</CardTitle>
+                        </div>
+                        <Badge variant="outline" className="font-mono text-[10px]">
+                            Layer B · analyze_digital_connectivity
+                        </Badge>
+                    </div>
+                </CardHeader>
+                <CardContent className="p-4 text-xs text-muted-foreground">
+                    Telecom connectivity analysis data is not available.
+                </CardContent>
+            </Card>
+        );
+    }
 
     const summary = telecom?.summary ?? {};
     const sitesCount = Number(summary.total_sites ?? telecom?.total_sites ?? 0);
@@ -1801,20 +1884,32 @@ function DetectedGapsCard({
 function DostTechnologiesCatalogSection({
     dostInterventions,
     projectCatalog,
+    catalogTechnologies,
 }: {
-    dostInterventions: DostInterventionItem[];
+    dostInterventions?: DostInterventionItem[];
     projectCatalog?: ProjectCatalogData;
+    catalogTechnologies?: any[];
 }) {
     const [search, setSearch] = useState('');
 
-    const filtered = dostInterventions.filter((tech) => {
+    const rawList: any[] = (Array.isArray(dostInterventions) && dostInterventions.length > 0)
+        ? dostInterventions
+        : (Array.isArray(catalogTechnologies) && catalogTechnologies.length > 0)
+        ? catalogTechnologies
+        : [];
+
+    const filtered = rawList.filter((tech: any) => {
         if (!search.trim()) return true;
         const q = search.toLowerCase();
+        const name = String(tech.name || '').toLowerCase();
+        const agency = String(tech.agency || '').toLowerCase();
+        const sector = String(tech.sector || '').toLowerCase();
+        const mechanism = String(tech.mechanism || tech.description || tech.outcome || '').toLowerCase();
         return (
-            tech.name.toLowerCase().includes(q) ||
-            (tech.agency && tech.agency.toLowerCase().includes(q)) ||
-            (tech.sector && tech.sector.toLowerCase().includes(q)) ||
-            (tech.mechanism && tech.mechanism.toLowerCase().includes(q))
+            name.includes(q) ||
+            agency.includes(q) ||
+            sector.includes(q) ||
+            mechanism.includes(q)
         );
     });
 
@@ -1840,33 +1935,43 @@ function DostTechnologiesCatalogSection({
                 </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {filtered.map((item) => (
-                    <Card key={item.id} className="border-blue-100 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
-                        <CardHeader className="pb-2">
-                            <div className="flex items-start justify-between gap-2">
-                                <div className="font-semibold text-sm text-slate-900 dark:text-slate-100">
-                                    {item.name}
+            {filtered.length === 0 ? (
+                <Card>
+                    <CardContent className="p-6 text-sm text-muted-foreground text-center">
+                        {search.trim()
+                            ? `No DOST technologies match "${search}". Try searching another keyword or agency.`
+                            : 'No specific DOST technologies catalog entries mapped to this locality yet.'}
+                    </CardContent>
+                </Card>
+            ) : (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {filtered.map((item: any, idx: number) => (
+                        <Card key={item.id ?? idx} className="border-blue-100 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
+                            <CardHeader className="pb-2">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="font-semibold text-sm text-slate-900 dark:text-slate-100">
+                                        {item.name || 'DOST Technology'}
+                                    </div>
+                                    <Badge variant="outline" className="text-[10px]">
+                                        {item.agency || 'DOST'}
+                                    </Badge>
                                 </div>
-                                <Badge variant="outline" className="text-[10px]">
-                                    {item.agency ?? 'DOST'}
-                                </Badge>
-                            </div>
-                            <div className="text-muted-foreground text-[11px] font-mono">{item.code}</div>
-                        </CardHeader>
-                        <CardContent className="flex flex-col gap-2 text-xs">
-                            {item.sector && (
-                                <Badge variant="secondary" className="w-fit text-[10px]">
-                                    {item.sector}
-                                </Badge>
-                            )}
-                            <p className="text-muted-foreground text-[11px] leading-relaxed line-clamp-3">
-                                {item.mechanism ?? item.outcome ?? 'Verified DOST scientific program package.'}
-                            </p>
-                        </CardContent>
-                    </Card>
-                ))}
-            </div>
+                                {item.code && <div className="text-muted-foreground text-[11px] font-mono">{item.code}</div>}
+                            </CardHeader>
+                            <CardContent className="flex flex-col gap-2 text-xs">
+                                {item.sector && (
+                                    <Badge variant="secondary" className="w-fit text-[10px]">
+                                        {item.sector}
+                                    </Badge>
+                                )}
+                                <p className="text-muted-foreground text-[11px] leading-relaxed line-clamp-3">
+                                    {item.mechanism || item.outcome || item.description || 'Verified DOST scientific program package.'}
+                                </p>
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
+            )}
         </section>
     );
 }
