@@ -1,0 +1,18 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "noEmit": true
+    },
+    "include": [
+        "resources/js/app.tsx",
+        "resources/js/types/**/*.ts",
+        "resources/js/components/philippine-map/**/*.ts",
+        "resources/js/components/philippine-map/**/*.tsx",
+        "resources/js/pages/admin/search-map/**/*.ts",
+        "resources/js/pages/admin/search-map/**/*.tsx",
+        "resources/js/pages/admin/assessment.tsx",
+        "resources/js/pages/location-assessment.tsx",
+        "resources/js/components/data-bars.tsx",
+        "resources/js/components/assessment-charts.tsx"
+    ]
+}
