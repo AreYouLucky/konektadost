@@ -293,6 +293,7 @@ export default function LocationAssessment({
     mapReturnUrl,
     resourceSummary,
     agricultureSummary,
+    projectCatalog,
 }: AssessmentPageProps) {
     const [activeSection, setActiveSection] = useState<ActiveSection>('profile_assets');
 
@@ -437,7 +438,7 @@ export default function LocationAssessment({
                             <Sparkles className="size-3.5" />
                         </div>
                         <div className="mt-0.5 font-semibold text-sm">Interventions</div>
-                        <p className="text-[11px] opacity-75">Matching, partners &amp; budgets</p>
+                        <p className="text-[11px] opacity-75">Matching, partners &amp; requirements</p>
                     </button>
                 </nav>
 
@@ -571,7 +572,6 @@ export default function LocationAssessment({
                         <DostTechnologiesCatalogSection
                             dostInterventions={dostInterventions}
                             catalogTechnologies={functionToolsBundle?.dost_technologies?.results}
-                            projectCatalog={projectCatalog}
                         />
                     </div>
                 )}
@@ -1321,7 +1321,6 @@ function LocalDostProjectsSection({
 
     const projects: LocalDostProjectItem[] = Array.isArray(data?.projects) ? data.projects : [];
     const totalMatched = Number(data?.total_matched_projects ?? projects.length ?? 0);
-    const totalBudget = Number(data?.total_recorded_budget_php ?? 0);
 
     return (
         <section className="flex flex-col gap-3">
@@ -1333,11 +1332,7 @@ function LocalDostProjectsSection({
                     <h2 className="text-lg font-semibold tracking-tight">Recorded DOST Agency Projects ({cityName} / Province)</h2>
                 </div>
                 <p className="text-muted-foreground text-sm">
-                    {totalMatched} historical/ongoing DOST project records matched from <code>dost_projects</code>
-                    {totalBudget > 0
-                        ? ` · Total recorded budget: ₱${totalBudget.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
-                        : ''}
-                    .
+                    {totalMatched} historical and ongoing DOST project records matched from <code>dost_projects</code>.
                 </p>
             </div>
 
@@ -1358,7 +1353,6 @@ function LocalDostProjectsSection({
                                         <th className="px-4 py-2.5 font-medium">Program &amp; Project Title</th>
                                         <th className="px-4 py-2.5 font-medium">Location</th>
                                         <th className="px-4 py-2.5 font-medium">Status</th>
-                                        <th className="px-4 py-2.5 text-right font-medium">Budget (PHP)</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y">
@@ -1372,11 +1366,6 @@ function LocalDostProjectsSection({
                                             <td className="text-muted-foreground px-4 py-2.5">{proj.location ?? '—'}</td>
                                             <td className="px-4 py-2.5">
                                                 <Badge variant="outline">{proj.normalized_status || proj.raw_status || 'Recorded'}</Badge>
-                                            </td>
-                                            <td className="px-4 py-2.5 text-right font-mono tabular-nums">
-                                                {proj.budget_php !== null && proj.budget_php !== undefined && Number(proj.budget_php) > 0
-                                                    ? `₱${Number(proj.budget_php).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
-                                                    : '—'}
                                             </td>
                                         </tr>
                                     ))}
@@ -1883,11 +1872,9 @@ function DetectedGapsCard({
 
 function DostTechnologiesCatalogSection({
     dostInterventions,
-    projectCatalog,
     catalogTechnologies,
 }: {
     dostInterventions?: DostInterventionItem[];
-    projectCatalog?: ProjectCatalogData;
     catalogTechnologies?: any[];
 }) {
     const [search, setSearch] = useState('');
@@ -1995,7 +1982,66 @@ function LayerEInterventionsSection({
     partners?: any;
     requirements?: any;
 }) {
-    const gapsMatches = matchedInterventions?.gap_interventions ?? [];
+    const gapsMatches: any[] = matchedInterventions?.gap_interventions ?? [];
+    const [viewMode, setViewMode] = useState<'consolidated' | 'by_gap'>('consolidated');
+
+    // Consolidate interventions across all gaps to eliminate duplicate cards
+    const uniqueInterventions = useMemo(() => {
+        const map = new Map<string, {
+            name: string;
+            agency: string;
+            availability_status: string;
+            relevance_score: number;
+            matching_criteria: string[];
+            intended_beneficiaries: string;
+            description?: string;
+            addressed_gaps: { gap_name: string; domain: string; severity: number }[];
+        }>();
+
+        for (const gm of gapsMatches) {
+            const gapInfo = {
+                gap_name: gm.gap_name || 'Identified Gap',
+                domain: gm.domain || 'General',
+                severity: gm.severity ?? 50,
+            };
+
+            const inters = gm.matched_interventions ?? [];
+            for (const mi of inters) {
+                const key = String(mi.name || '').trim().toLowerCase();
+                if (!key) continue;
+
+                if (!map.has(key)) {
+                    map.set(key, {
+                        name: mi.name,
+                        agency: mi.agency || 'DOST',
+                        availability_status: mi.availability_status || 'available',
+                        relevance_score: Number(mi.relevance_score ?? 75),
+                        matching_criteria: Array.isArray(mi.matching_criteria) ? [...mi.matching_criteria] : [],
+                        intended_beneficiaries: mi.intended_beneficiaries || 'Target local beneficiaries',
+                        description: mi.description,
+                        addressed_gaps: [gapInfo],
+                    });
+                } else {
+                    const existing = map.get(key)!;
+                    if (!existing.addressed_gaps.some((g) => g.gap_name === gapInfo.gap_name)) {
+                        existing.addressed_gaps.push(gapInfo);
+                    }
+                    if (Number(mi.relevance_score ?? 0) > existing.relevance_score) {
+                        existing.relevance_score = Number(mi.relevance_score);
+                    }
+                    if (Array.isArray(mi.matching_criteria)) {
+                        for (const crit of mi.matching_criteria) {
+                            if (!existing.matching_criteria.includes(crit)) {
+                                existing.matching_criteria.push(crit);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return Array.from(map.values()).sort((a, b) => b.relevance_score - a.relevance_score);
+    }, [gapsMatches]);
 
     return (
         <div className="flex flex-col gap-6">
@@ -2099,84 +2145,185 @@ function LayerEInterventionsSection({
                 </div>
             )}
 
-            {/* Matched Interventions per Gap */}
+            {/* Matched Interventions Section with View Mode Switcher */}
             <div className="flex flex-col gap-4">
-                <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">
-                    Matched DOST STI Programs per Identified Gap
-                </h3>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">
+                            Matched DOST STI Programs &amp; Interventions
+                        </h3>
+                        <p className="text-xs text-muted-foreground">
+                            {uniqueInterventions.length} distinct technologies mapped across {gapsMatches.length} identified development gaps.
+                        </p>
+                    </div>
 
-                {gapsMatches.length === 0 ? (
-                    <Card>
-                        <CardContent className="p-6 text-sm text-muted-foreground">
-                            No specific gap matches computed yet.
-                        </CardContent>
-                    </Card>
-                ) : (
-                    gapsMatches.map((gm: any, idx: number) => (
-                        <Card key={idx} className="border-blue-100 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
-                            <CardHeader className="pb-3 border-b dark:border-slate-800">
-                                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                                    <div>
-                                        <Badge variant="outline" className="text-[10px] font-mono uppercase">
-                                            Gap Domain: {gm.domain}
-                                        </Badge>
-                                        <CardTitle className="text-sm font-semibold mt-1 text-slate-900 dark:text-slate-100">
-                                            {gm.gap_name}
-                                        </CardTitle>
-                                    </div>
-                                    <span className="text-xs text-muted-foreground">
-                                        Severity: <span className="font-bold text-amber-700 dark:text-amber-400">{gm.severity}%</span>
-                                    </span>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="flex flex-col gap-3 pt-3 text-xs">
-                                {gm.matched_interventions && gm.matched_interventions.length > 0 ? (
-                                    <div className="grid gap-3 sm:grid-cols-2">
-                                        {gm.matched_interventions.map((mi: any, miIdx: number) => (
-                                            <div
-                                                key={miIdx}
-                                                className="flex flex-col gap-2 rounded-lg border border-slate-100 bg-slate-50/60 p-3 dark:border-slate-800 dark:bg-slate-950"
-                                            >
-                                                <div className="flex items-start justify-between gap-2">
-                                                    <div className="font-semibold text-slate-900 dark:text-slate-100">
-                                                        {mi.name}
-                                                    </div>
-                                                    <Badge className="bg-[#123575] shrink-0 text-[10px]">
-                                                        {mi.relevance_score}% Relevance
-                                                    </Badge>
+                    <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900">
+                        <button
+                            type="button"
+                            onClick={() => setViewMode('consolidated')}
+                            className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
+                                viewMode === 'consolidated'
+                                    ? 'bg-[#123575] text-white shadow-xs'
+                                    : 'text-muted-foreground hover:text-slate-900 dark:hover:text-slate-100'
+                            }`}
+                        >
+                            Unique Interventions ({uniqueInterventions.length})
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setViewMode('by_gap')}
+                            className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
+                                viewMode === 'by_gap'
+                                    ? 'bg-[#123575] text-white shadow-xs'
+                                    : 'text-muted-foreground hover:text-slate-900 dark:hover:text-slate-100'
+                            }`}
+                        >
+                            By Specific Gap ({gapsMatches.length})
+                        </button>
+                    </div>
+                </div>
+
+                {/* VIEW 1: Consolidated Unique Interventions (Default - Zero Duplicate Cards) */}
+                {viewMode === 'consolidated' && (
+                    <div className="flex flex-col gap-3">
+                        {uniqueInterventions.length === 0 ? (
+                            <Card>
+                                <CardContent className="p-6 text-sm text-muted-foreground text-center">
+                                    No specific DOST catalog interventions currently matched to identified gaps.
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                {uniqueInterventions.map((item, idx) => (
+                                    <div
+                                        key={idx}
+                                        className="flex flex-col gap-2.5 rounded-xl border border-blue-100 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900"
+                                    >
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div>
+                                                <div className="font-semibold text-sm text-slate-900 dark:text-slate-100">
+                                                    {item.name}
                                                 </div>
-
-                                                <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                                                    <span>Agency: <strong>{mi.agency}</strong></span>
+                                                <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
+                                                    <span>Agency: <strong>{item.agency}</strong></span>
                                                     <span>·</span>
-                                                    <span>Status: <strong className="capitalize">{mi.availability_status}</strong></span>
-                                                </div>
-
-                                                {mi.matching_criteria && (
-                                                    <div className="flex flex-col gap-1 border-t pt-2 dark:border-slate-800">
-                                                        <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-400">Matching Basis:</span>
-                                                        <ul className="list-disc pl-4 text-[10px] text-muted-foreground space-y-0.5">
-                                                            {mi.matching_criteria.map((crit: string, cIdx: number) => (
-                                                                <li key={cIdx}>{crit}</li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                )}
-
-                                                <div className="text-[10px] text-muted-foreground mt-auto">
-                                                    Target Beneficiaries: <em>{mi.intended_beneficiaries}</em>
+                                                    <span>Status: <strong className="capitalize">{item.availability_status.replace('_', ' ')}</strong></span>
                                                 </div>
                                             </div>
-                                        ))}
+                                            <Badge className="bg-[#123575] shrink-0 text-[10px]">
+                                                {item.relevance_score}% Relevance
+                                            </Badge>
+                                        </div>
+
+                                        {/* Addressed Municipal Gaps Pills */}
+                                        <div className="flex flex-col gap-1 border-t pt-2 dark:border-slate-800">
+                                            <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-300">
+                                                Addressed Municipal Gaps ({item.addressed_gaps.length}):
+                                            </span>
+                                            <div className="flex flex-wrap gap-1">
+                                                {item.addressed_gaps.map((g, gIdx) => (
+                                                    <Badge
+                                                        key={gIdx}
+                                                        variant="secondary"
+                                                        className="text-[10px] font-normal border-amber-200 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
+                                                    >
+                                                        {g.gap_name} ({g.severity}% severity)
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Matching Criteria */}
+                                        {item.matching_criteria.length > 0 && (
+                                            <div className="flex flex-col gap-1 border-t pt-2 dark:border-slate-800">
+                                                <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-400">Matching Basis:</span>
+                                                <ul className="list-disc pl-4 text-[10px] text-muted-foreground space-y-0.5">
+                                                    {item.matching_criteria.slice(0, 2).map((crit, cIdx) => (
+                                                        <li key={cIdx}>{crit}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+
+                                        <div className="mt-auto pt-2 border-t text-[10px] text-muted-foreground dark:border-slate-800">
+                                            Target Beneficiaries: <em>{item.intended_beneficiaries}</em>
+                                        </div>
                                     </div>
-                                ) : (
-                                    <p className="text-muted-foreground text-xs italic">
-                                        {gm.gap_unmatched_note ?? 'No verified DOST catalog intervention currently recorded for this specific gap domain.'}
-                                    </p>
-                                )}
-                            </CardContent>
-                        </Card>
-                    ))
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* VIEW 2: By Specific Gap */}
+                {viewMode === 'by_gap' && (
+                    <div className="flex flex-col gap-4">
+                        {gapsMatches.map((gm: any, idx: number) => (
+                            <Card key={idx} className="border-blue-100 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
+                                <CardHeader className="pb-3 border-b dark:border-slate-800">
+                                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                        <div>
+                                            <Badge variant="outline" className="text-[10px] font-mono uppercase">
+                                                Gap Domain: {gm.domain}
+                                            </Badge>
+                                            <CardTitle className="text-sm font-semibold mt-1 text-slate-900 dark:text-slate-100">
+                                                {gm.gap_name}
+                                            </CardTitle>
+                                        </div>
+                                        <span className="text-xs text-muted-foreground">
+                                            Severity: <span className="font-bold text-amber-700 dark:text-amber-400">{gm.severity}%</span>
+                                        </span>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="flex flex-col gap-3 pt-3 text-xs">
+                                    {gm.matched_interventions && gm.matched_interventions.length > 0 ? (
+                                        <div className="grid gap-3 sm:grid-cols-2">
+                                            {gm.matched_interventions.map((mi: any, miIdx: number) => (
+                                                <div
+                                                    key={miIdx}
+                                                    className="flex flex-col gap-2 rounded-lg border border-slate-100 bg-slate-50/60 p-3 dark:border-slate-800 dark:bg-slate-950"
+                                                >
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <div className="font-semibold text-slate-900 dark:text-slate-100">
+                                                            {mi.name}
+                                                        </div>
+                                                        <Badge className="bg-[#123575] shrink-0 text-[10px]">
+                                                            {mi.relevance_score}% Relevance
+                                                        </Badge>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                                                        <span>Agency: <strong>{mi.agency}</strong></span>
+                                                        <span>·</span>
+                                                        <span>Status: <strong className="capitalize">{mi.availability_status}</strong></span>
+                                                    </div>
+
+                                                    {mi.matching_criteria && (
+                                                        <div className="flex flex-col gap-1 border-t pt-2 dark:border-slate-800">
+                                                            <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-400">Matching Basis:</span>
+                                                            <ul className="list-disc pl-4 text-[10px] text-muted-foreground space-y-0.5">
+                                                                {mi.matching_criteria.map((crit: string, cIdx: number) => (
+                                                                    <li key={cIdx}>{crit}</li>
+                                                                ))}
+                                                            </ul>
+                                                        </div>
+                                                    )}
+
+                                                    <div className="text-[10px] text-muted-foreground mt-auto">
+                                                        Target Beneficiaries: <em>{mi.intended_beneficiaries}</em>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-muted-foreground text-xs italic">
+                                            {gm.gap_unmatched_note ?? 'No verified DOST catalog intervention currently recorded for this specific gap domain.'}
+                                        </p>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
                 )}
             </div>
 
@@ -2203,42 +2350,42 @@ function LayerEInterventionsSection({
                     </Card>
                 )}
 
-                {/* Resource & Funding Profile */}
+                {/* Resource & Operational Requirements */}
                 {requirements?.requirements && (
                     <Card className="border-blue-100 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
                         <CardHeader className="pb-2">
                             <div className="flex items-center gap-2">
-                                <Coins className="size-4 text-emerald-600" />
-                                <CardTitle className="text-sm font-semibold">Resource Requirements &amp; Historical Budget</CardTitle>
+                                <Wrench className="size-4 text-emerald-600" />
+                                <CardTitle className="text-sm font-semibold">Technical &amp; Operational Requirements</CardTitle>
                             </div>
                         </CardHeader>
                         <CardContent className="flex flex-col gap-3 text-xs">
                             {requirements.requirements.equipment_and_hardware && (
                                 <div>
-                                    <span className="text-[11px] font-semibold text-slate-800 dark:text-slate-200">Hardware Package:</span>
+                                    <span className="text-[11px] font-semibold text-slate-800 dark:text-slate-200">Hardware &amp; Equipment Package:</span>
                                     <p className="text-[11px] text-muted-foreground">
                                         {requirements.requirements.equipment_and_hardware.primary_hardware}
                                     </p>
                                 </div>
                             )}
 
-                            {requirements.requirements.funding_profile && (
+                            {requirements.requirements.infrastructure_prerequisites && (
                                 <div className="border-t pt-2 dark:border-slate-800">
-                                    <span className="text-[11px] font-semibold text-slate-800 dark:text-slate-200">Historical Funding Benchmark:</span>
-                                    {requirements.requirements.funding_profile.historical_benchmark_budget ? (
-                                        <div className="mt-1 flex items-baseline gap-2 font-mono">
-                                            <span className="text-base font-bold text-emerald-700 dark:text-emerald-400">
-                                                ₱{requirements.requirements.funding_profile.historical_benchmark_budget.median_php?.toLocaleString()}
-                                            </span>
-                                            <span className="text-[10px] text-muted-foreground">
-                                                (Median of {requirements.requirements.funding_profile.historical_benchmark_budget.sample_projects_count} verified projects)
-                                            </span>
-                                        </div>
-                                    ) : (
-                                        <p className="text-[11px] text-amber-700 dark:text-amber-400 italic mt-0.5">
-                                            Pending detailed proposal costing.
-                                        </p>
-                                    )}
+                                    <span className="text-[11px] font-semibold text-slate-800 dark:text-slate-200">Facility &amp; Utility Readiness:</span>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        {requirements.requirements.infrastructure_prerequisites.electricity_required ? 'Stable AC Power / Solar Back-up' : 'Off-grid Operable'}
+                                        {' · '}
+                                        {requirements.requirements.infrastructure_prerequisites.connectivity_required ? 'Cellular / Internet Connection' : 'Offline Mode Supported'}
+                                    </p>
+                                </div>
+                            )}
+
+                            {requirements.requirements.staffing_and_training && (
+                                <div className="border-t pt-2 dark:border-slate-800">
+                                    <span className="text-[11px] font-semibold text-slate-800 dark:text-slate-200">Personnel &amp; Operational Capacity:</span>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        {requirements.requirements.staffing_and_training.training_capacity_notes || 'Designated local operator with DOST technical training and equipment orientation.'}
+                                    </p>
                                 </div>
                             )}
                         </CardContent>

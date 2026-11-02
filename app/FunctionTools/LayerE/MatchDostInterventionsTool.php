@@ -312,8 +312,19 @@ class MatchDostInterventionsTool implements FunctionToolInterface
         // Sort candidates by relevance score descending
         usort($candidateInterventions, fn ($a, $b) => $b['relevance_score'] <=> $a['relevance_score']);
 
-        // Return top 5 matches max per gap to maintain focus
-        return array_slice($candidateInterventions, 0, 5);
+        // Deduplicate candidates by normalized name so the same technology across tables is not duplicated
+        $uniqueCandidates = [];
+        $seenNames = [];
+        foreach ($candidateInterventions as $item) {
+            $key = strtolower(trim((string) preg_replace('/[^a-z0-9]+/i', '', (string) ($item['name'] ?? ''))));
+            if ($key !== '' && ! isset($seenNames[$key])) {
+                $seenNames[$key] = true;
+                $uniqueCandidates[] = $item;
+            }
+        }
+
+        // Return top 4 unique matches max per gap to maintain high relevance
+        return array_slice($uniqueCandidates, 0, 4);
     }
 
     protected function getDomainKeywords(string $domain, string $gapName): array
