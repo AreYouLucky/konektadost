@@ -13,8 +13,8 @@ export function markerGroup(category: MapResourcePin['category']): MarkerGroup {
 
 /** Shared by the canvas markers and the SVG legend so every symbol stays consistent. */
 export const RESOURCE_MARKERS: Record<MapResourcePin['category'], { label: string; color: string; paths: string[] }> = {
-    dost_tech: { label: 'DOST Technologies', color: '#00aeef', paths: ['M7 7h10v10H7ZM10 3v4m4-4v4m-4 10v4m4-4v4M3 10h4m-4 4h4m10-4h4m-4 4h4'] },
-    laboratory: { label: 'DOST Laboratories', color: '#00aeef', paths: ['M9 3h6M10 3v7L4 20q-1 2 2 2h12q3 0 2-2l-6-10V3M7 16h10'] },
+    dost_tech: { label: 'DOST Technologies', color: '#087dcc', paths: ['M7 7h10v10H7ZM10 3v4m4-4v4m-4 10v4m4-4v4M3 10h4m-4 4h4m10-4h4m-4 4h4'] },
+    laboratory: { label: 'DOST Laboratories', color: '#087dcc', paths: ['M9 3h6M10 3v7L4 20q-1 2 2 2h12q3 0 2-2l-6-10V3M7 16h10'] },
     telecom: {
         label: 'Cell sites',
         color: '#ea580c',
@@ -27,7 +27,7 @@ export const RESOURCE_MARKERS: Record<MapResourcePin['category'], { label: strin
         paths: ['M2 5c4-2 7-2 10 0v16c-3-2-6-2-10 0Z', 'M22 5c-4-2-7-2-10 0v16c3-2 6-2 10 0Z'],
     },
     safety: { label: 'Safety facilities', color: '#c17a13', paths: ['M12 2 3 6v6c0 5 6 9 9 10 3-1 9-5 9-10V6Z', 'm8 12 3 3 5-6'] },
-    facility: { label: 'Other facilities', color: '#1e3a8a', paths: ['M4 22V3h16v19M2 22h20M8 7h1m6 0h1M8 11h1m6 0h1M10 22v-6h4v6'] },
+    facility: { label: 'Other facilities', color: '#087dcc', paths: ['M4 22V3h16v19M2 22h20M8 7h1m6 0h1M8 11h1m6 0h1M10 22v-6h4v6'] },
 };
 
 export function markerShape(category: MapResourcePin['category']): string {

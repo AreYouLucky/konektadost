@@ -315,7 +315,7 @@ function buildPopupHtml(item: MapMarkerItem): string {
         return `
             <div style="min-width:200px;max-width:260px;line-height:1.35;">
                 <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
-                    <span style="background:${RESOURCE_MARKERS.laboratory.color};color:#0b2454;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;text-transform:uppercase;">DOST Lab</span>
+                    <span style="background:${RESOURCE_MARKERS.laboratory.color};color:#fff;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;text-transform:uppercase;">DOST Lab</span>
                     ${badge}
                 </div>
                 <div style="font-weight:600;font-size:13px;color:#0f172a;">${escapeHtml(item.title)}</div>
@@ -328,11 +328,11 @@ function buildPopupHtml(item: MapMarkerItem): string {
 
     if (item.category === 'dost_tech') {
         const codeBadge = item.code
-            ? `<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:4px;font-size:11px;font-family:monospace;">${escapeHtml(item.code)}</span>`
+            ? `<span style="background:#dbeafe;color:#087dcc;padding:1px 6px;border-radius:4px;font-size:11px;font-family:monospace;">${escapeHtml(item.code)}</span>`
             : '';
         const meta = [item.agency, item.sector].filter(Boolean).map(escapeHtml).join(' · ');
         const cityLine = item.city
-            ? `<div style="margin-top:4px;font-size:11px;color:#1e3a8a;font-weight:600;">Cluster: ${escapeHtml(item.city)}</div>`
+            ? `<div style="margin-top:4px;font-size:11px;color:#087dcc;font-weight:600;">Cluster: ${escapeHtml(item.city)}</div>`
             : '';
         const outcome = item.outcome
             ? `<div style="margin-top:4px;font-size:11px;color:#334155;"><strong>Outcome:</strong> ${escapeHtml(item.outcome)}</div>`
@@ -341,7 +341,7 @@ function buildPopupHtml(item: MapMarkerItem): string {
         return `
             <div style="min-width:210px;max-width:270px;line-height:1.35;">
                 <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
-                    <span style="background:${RESOURCE_MARKERS.dost_tech.color};color:#0b2454;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;text-transform:uppercase;">DOST Tech</span>
+                    <span style="background:${RESOURCE_MARKERS.dost_tech.color};color:#fff;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;text-transform:uppercase;">DOST Tech</span>
                     ${codeBadge}
                 </div>
                 <div style="font-weight:600;font-size:13px;color:#0f172a;">${escapeHtml(item.title)}</div>

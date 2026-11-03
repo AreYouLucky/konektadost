@@ -7,6 +7,7 @@ use App\FunctionTools\Support\LocationResolver;
 use App\Models\DostProject;
 use App\Models\DostTech;
 use App\Models\Municipality;
+use Illuminate\Support\Facades\Schema;
 use App\Models\Technology;
 
 /**
@@ -233,13 +234,13 @@ class EstimateInterventionRequirementsTool implements FunctionToolInterface
             ->where('budget', '!=', '')
             ->where('budget', '!=', '0');
 
-        $matchingProjects = $budgetQuery
+        $matchingProjects = Schema::hasTable('dost_projects') ? $budgetQuery
             ->where(function ($q) use ($domain) {
                 $q->where('sector', 'like', '%' . $domain . '%')
                     ->orWhere('project_title', 'like', '%' . $domain . '%');
             })
             ->take(20)
-            ->get();
+            ->get() : collect();
 
         $validBudgets = [];
         foreach ($matchingProjects as $p) {
@@ -305,7 +306,7 @@ class EstimateInterventionRequirementsTool implements FunctionToolInterface
     protected function resolveIntervention(?string $id, ?string $sector): array
     {
         if ($id) {
-            $tech = Technology::where('code', $id)->orWhere('id', is_numeric($id) ? (int)$id : 0)->first();
+            $tech = Schema::hasTable('technologies') ? Technology::where('code', $id)->orWhere('id', is_numeric($id) ? (int)$id : 0)->first() : null;
             if ($tech) {
                 return [
                     'id' => $tech->code ?? ('TECH-' . $tech->id),
@@ -316,7 +317,7 @@ class EstimateInterventionRequirementsTool implements FunctionToolInterface
                 ];
             }
 
-            $dtech = DostTech::where('code', $id)->orWhere('id', is_numeric($id) ? (int)$id : 0)->first();
+            $dtech = Schema::hasTable('dost_techs') ? DostTech::where('code', $id)->orWhere('id', is_numeric($id) ? (int)$id : 0)->first() : null;
             if ($dtech) {
                 return [
                     'id' => $dtech->code ?? ('DTECH-' . $dtech->id),

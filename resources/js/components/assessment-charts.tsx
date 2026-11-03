@@ -21,7 +21,7 @@ interface BarangayFigure {
     priority_level: string;
 }
 
-const chartCard = 'min-w-0 rounded-2xl border-blue-100 bg-white shadow-[0_4px_20px_-8px_#12357524] dark:bg-slate-950';
+const chartCard = 'min-w-0 rounded-2xl border-blue-100 bg-white shadow-[0_4px_20px_-8px_#087dcc24] dark:bg-slate-950';
 
 export default function AssessmentCharts({
     results,
@@ -108,7 +108,7 @@ export default function AssessmentCharts({
                                     .filter((row) => row.value !== null)
                                     .sort((a, b) => b.value! - a.value!)
                                     .slice(0, 10)
-                                    .map((row) => ({ label: row.name, value: row.value, color: '#00aeef' }))}
+                                    .map((row) => ({ label: row.name, value: row.value, color: '#087dcc' }))}
                             />
                         </CardContent>
                     </Card>
@@ -121,7 +121,7 @@ export default function AssessmentCharts({
                                     rows={[...priority].map(([key, value]) => ({
                                         label: labels[key] ?? key,
                                         value,
-                                        color: key === 'high' ? '#d97706' : key === 'unmeasured' ? '#94a3b8' : '#123575',
+                                        color: key === 'high' ? '#d97706' : key === 'unmeasured' ? '#94a3b8' : '#087dcc',
                                     }))}
                                 />
                             </CardContent>

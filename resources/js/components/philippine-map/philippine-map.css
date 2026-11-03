@@ -1,7 +1,7 @@
 .philippine-explorer {
     --ink: #153d38;
     --muted: #738580;
-    --action: #123575;
+    --action: #087dcc;
     --line: rgba(43, 86, 74, 0.1);
     position: relative;
     width: 100%;
@@ -25,7 +25,7 @@
 .philippine-explorer button:focus-visible:not(:where([data-map-toolbar] *, [data-map-info-panel] *, [data-map-resource-key] *)),
 .philippine-explorer a:focus-visible,
 .philippine-explorer input:focus-visible {
-    outline: 2px solid #2563eb;
+    outline: 2px solid #087dcc;
     outline-offset: 4px;
 }
 .philippine-explorer .explorer-map {
@@ -78,7 +78,7 @@
     width: 5px;
     height: 5px;
     border-radius: 50%;
-    background: #015c91;
+    background: #087dcc;
     box-shadow: 0 0 0 3px #116f5d;
 }
 .philippine-explorer .explorer-brand-copy {
@@ -137,9 +137,9 @@
     border: 1px solid white;
 }
 .philippine-explorer .location-explorer {
-    --ink: #123575;
+    --ink: #087dcc;
     --muted: #64748b;
-    --action: #123575;
+    --action: #087dcc;
     --line: #e2e8f0;
     position: absolute;
     z-index: 15;
@@ -155,7 +155,7 @@
     background: #fff;
     color: var(--ink);
     border: 1px solid #e2e8f0;
-    box-shadow: 0 16px 60px #12357524;
+    box-shadow: 0 16px 60px #087dcc24;
     animation: explorer-enter 0.65s both;
 }
 .philippine-explorer .sheet-handle,
@@ -191,7 +191,7 @@
     flex-shrink: 0;
     border-radius: 12px;
     background: #eff6ff;
-    color: #123575;
+    color: #087dcc;
 }
 .philippine-explorer .explorer-heading h1 {
     margin: 0;
@@ -265,7 +265,7 @@
     color: #64748b;
 }
 .philippine-explorer .search-popover {
-    --ink: #123575;
+    --ink: #087dcc;
     position: absolute;
     z-index: 40;
     top: calc(100% + 8px);
@@ -275,7 +275,7 @@
     border-radius: 13px;
     background: #fff;
     color: var(--ink);
-    box-shadow: 0 12px 32px #1235751a;
+    box-shadow: 0 12px 32px #087dcc1a;
     overflow: hidden;
 }
 .philippine-explorer .search-popover-label {
@@ -313,7 +313,7 @@
     flex-shrink: 0;
     background: #dbeafe;
     border-radius: 8px;
-    color: #123575;
+    color: #087dcc;
 }
 .philippine-explorer .search-result-copy {
     display: flex;
@@ -332,7 +332,7 @@
     line-height: 1.5;
 }
 .philippine-explorer .search-result > svg {
-    color: #123575;
+    color: #087dcc;
     flex-shrink: 0;
 }
 .philippine-explorer .search-feedback:not(:empty) {
@@ -374,7 +374,7 @@
 .philippine-explorer .explorer-breadcrumb button:hover,
 .philippine-explorer .explorer-breadcrumb button[aria-current] {
     color: #fff;
-    background: #123575;
+    background: #087dcc;
 }
 .philippine-explorer .breadcrumb-segment {
     display: flex;
@@ -457,12 +457,12 @@
     border-radius: 6px;
     background: #eff6ff;
     font-size: 10px;
-    color: #123575;
+    color: #087dcc;
 }
 .philippine-explorer .explorer-back {
     border: 0;
     border-radius: 6px;
-    background: #123575;
+    background: #087dcc;
     padding: 6px;
     color: #fff;
 }
@@ -504,14 +504,14 @@
 .philippine-explorer .location-row.is-hovered {
     background: #eff6ff;
     border-color: #bfdbfe;
-    color: #123575;
+    color: #087dcc;
 }
 .philippine-explorer .location-row:active {
     transform: scale(0.985);
 }
 .philippine-explorer .location-row.is-selected {
-    background: #123575;
-    border-color: #123575;
+    background: #087dcc;
+    border-color: #087dcc;
     color: #fff;
 }
 .philippine-explorer .location-row-symbol {
@@ -522,7 +522,7 @@
     border-radius: 8px;
     background: #eff6ff;
     flex-shrink: 0;
-    color: #123575;
+    color: #087dcc;
 }
 .philippine-explorer .location-row-name {
     flex: 1;
@@ -537,7 +537,7 @@
 }
 .philippine-explorer .location-row:hover .location-row-arrow {
     transform: translateX(2px);
-    color: #123575;
+    color: #087dcc;
 }
 .philippine-explorer .location-row.is-selected .location-row-symbol {
     background: rgb(255 255 255 / 12%);
@@ -580,7 +580,7 @@
     border-radius: 20px;
     padding: 7px 13px;
     background: #eff6ff;
-    color: #123575;
+    color: #087dcc;
     box-shadow: 0 3px 10px #31523712;
 }
 .philippine-explorer .geography-error {
@@ -589,7 +589,7 @@
     border-radius: 10px;
     border: 1px solid #dce4d5;
     background: #eff6ff;
-    color: #123575;
+    color: #087dcc;
 }
 .philippine-explorer .geography-error p {
     font-size: 11px;
@@ -670,7 +670,7 @@
     animation: row-enter 0.35s both;
 }
 .philippine-explorer .selected-location-icon {
-    color: #123575;
+    color: #087dcc;
     background: #dbeafe;
     padding: 8px;
     border-radius: 10px;
@@ -1011,7 +1011,7 @@
         font-weight: 600;
         border: 0;
         background: transparent;
-        color: #123575;
+        color: #087dcc;
     }
     .philippine-explorer .mobile-explorer-summary small {
         display: inline;

@@ -169,7 +169,8 @@ class AssessImplementationFeasibilityTool implements FunctionToolInterface
         }
 
         // Prerequisite C: Digital & Power Utilities
-        $telecomCount = TelecomSite::where('municipality_id', $municipality->id)->count();
+        $telecomCount = Schema::hasTable('telecom_sites')
+            ? app(\App\FunctionTools\LayerA\GetAvailableDatasetsTool::class)->telecomQueryFor($municipality)->count() : null;
         $isDigitalTool = in_array($intervention['domain'], ['digital_connectivity', 'education', 'sti_capacity']);
 
         if ($isDigitalTool) {
@@ -197,7 +198,7 @@ class AssessImplementationFeasibilityTool implements FunctionToolInterface
         }
 
         // Prerequisite D: Institutional Host & Facility
-        $facilityCount = Facility::where('municipality_id', $municipality->id)->count();
+        $facilityCount = Schema::hasTable('facilities') ? Facility::where('municipality_id', $municipality->id)->count() : null;
         if ($facilityCount > 0) {
             $prerequisites[] = [
                 'prerequisite' => 'Institutional Host Facility',
@@ -294,7 +295,7 @@ class AssessImplementationFeasibilityTool implements FunctionToolInterface
     protected function resolveIntervention(?string $id): array
     {
         if ($id) {
-            $tech = Technology::where('code', $id)->orWhere('id', is_numeric($id) ? (int)$id : 0)->first();
+            $tech = Schema::hasTable('technologies') ? Technology::where('code', $id)->orWhere('id', is_numeric($id) ? (int)$id : 0)->first() : null;
             if ($tech) {
                 return [
                     'id' => $tech->code ?? ('TECH-' . $tech->id),
@@ -306,7 +307,7 @@ class AssessImplementationFeasibilityTool implements FunctionToolInterface
                 ];
             }
 
-            $dtech = DostTech::where('code', $id)->orWhere('id', is_numeric($id) ? (int)$id : 0)->first();
+            $dtech = Schema::hasTable('dost_techs') ? DostTech::where('code', $id)->orWhere('id', is_numeric($id) ? (int)$id : 0)->first() : null;
             if ($dtech) {
                 return [
                     'id' => $dtech->code ?? ('DTECH-' . $dtech->id),
@@ -318,7 +319,7 @@ class AssessImplementationFeasibilityTool implements FunctionToolInterface
                 ];
             }
 
-            if (str_starts_with($id, 'PROJ-')) {
+            if (str_starts_with($id, 'PROJ-') && Schema::hasTable('dost_projects')) {
                 $proj = DostProject::find((int)str_replace('PROJ-', '', $id));
                 if ($proj) {
                     return [

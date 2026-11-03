@@ -13,6 +13,7 @@ use App\Models\Facility;
 use App\Models\Municipality;
 use App\Models\Technology;
 use App\Models\TelecomSite;
+use App\Support\Assessment\IndicatorCatalog;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -115,6 +116,21 @@ class MatchDostInterventionsTool implements FunctionToolInterface
         $totalInterventionsMatched = 0;
 
         foreach ($gaps as $gap) {
+            // Layer C emits indicator_key/label/dimension/severity_score.
+            // Preserve that evidence when adapting to Layer E's gap contract.
+            $gap['gap_id'] = $gap['gap_id'] ?? $gap['indicator_key'] ?? 'unknown_gap';
+            $gap['gap_name'] = $gap['gap_name'] ?? $gap['label'] ?? 'Identified Gap';
+            $gap['severity'] = $gap['severity'] ?? $gap['severity_score'] ?? null;
+            $gap['domain'] = $gap['domain'] ?? match ($gap['dimension'] ?? '') {
+                IndicatorCatalog::DIMENSION_HEALTH => 'health',
+                IndicatorCatalog::DIMENSION_EDUCATION => 'education',
+                IndicatorCatalog::DIMENSION_STI => 'sti_capacity',
+                IndicatorCatalog::DIMENSION_CONNECTIVITY => str_contains($gap['indicator_key'] ?? '', 'road') ? 'roads' : 'digital_connectivity',
+                IndicatorCatalog::DIMENSION_DRR_SAFETY => 'safety_drrm',
+                IndicatorCatalog::DIMENSION_POPULATION => 'population',
+                'agriculture_fisheries_food' => 'agriculture',
+                default => 'general',
+            };
             $domain = $gap['domain'] ?? 'general';
             if ($filterSector !== null && !str_contains(strtolower($domain), $filterSector) && !str_contains(strtolower($gap['gap_name'] ?? ''), $filterSector)) {
                 continue;
@@ -157,30 +173,12 @@ class MatchDostInterventionsTool implements FunctionToolInterface
      */
     protected function gatherLocalContext(Municipality $municipality): array
     {
-        $healthFacilityCount = Facility::query()
-            ->where('municipality_id', $municipality->id)
-            ->where('facility_type', 'health')
-            ->count();
-
-        $educationFacilityCount = Facility::query()
-            ->where('municipality_id', $municipality->id)
-            ->where('facility_type', 'education')
-            ->count();
-
-        $safetyFacilityCount = Facility::query()
-            ->where('municipality_id', $municipality->id)
-            ->where('facility_type', 'safety')
-            ->count();
-
-        $telecomCount = TelecomSite::query()
-            ->where(function ($query) use ($municipality) {
-                $query->where('municipality_id', $municipality->id);
-                if ($municipality->psg_code) {
-                    $prefix = substr($municipality->psg_code, 0, 6);
-                    $query->orWhere('barangay_psgc', 'like', $prefix . '%');
-                }
-            })
-            ->count();
+        $hasFacilities = Schema::hasTable('facilities');
+        $healthFacilityCount = $hasFacilities ? Facility::where('municipality_id', $municipality->id)->where('sector', 'health')->count() : null;
+        $educationFacilityCount = $hasFacilities ? Facility::where('municipality_id', $municipality->id)->where('sector', 'education')->count() : null;
+        $safetyFacilityCount = $hasFacilities ? Facility::where('municipality_id', $municipality->id)->where('sector', 'safety')->count() : null;
+        $telecomCount = Schema::hasTable('telecom_sites')
+            ? app(\App\FunctionTools\LayerA\GetAvailableDatasetsTool::class)->telecomQueryFor($municipality)->count() : null;
 
         $agricultureCommodities = [];
         if (Schema::hasTable('agriculture_count_estimates')) {
@@ -215,7 +213,7 @@ class MatchDostInterventionsTool implements FunctionToolInterface
 
         // 1. Search Technology model (STI Program Catalog)
         $techQuery = Technology::query();
-        $technologies = $techQuery->get();
+        $technologies = Schema::hasTable('technologies') ? $techQuery->get() : collect();
 
         foreach ($technologies as $tech) {
             $score = $this->evaluateTechnologyRelevance($tech, $domain, $domainSectors, $gapKeywords, $localContext);
@@ -243,7 +241,7 @@ class MatchDostInterventionsTool implements FunctionToolInterface
 
         // 2. Search DostTech model (NCR & Regional Masterlist Technologies)
         $dostTechQuery = DostTech::query();
-        $dostTechs = $dostTechQuery->get();
+        $dostTechs = Schema::hasTable('dost_techs') ? $dostTechQuery->get() : collect();
 
         foreach ($dostTechs as $dtech) {
             $score = $this->evaluateDostTechRelevance($dtech, $domain, $domainSectors, $gapKeywords, $localContext);
@@ -271,7 +269,7 @@ class MatchDostInterventionsTool implements FunctionToolInterface
 
         // 3. Search DostProject model for high-relevance established programs (e.g. CEST, SETUP, ASTI-EWS)
         $projectQuery = DostProject::query();
-        $matchingProjects = $projectQuery
+        $matchingProjects = Schema::hasTable('dost_projects') ? $projectQuery
             ->where(function ($q) use ($domainSectors, $gapKeywords) {
                 foreach ($domainSectors as $sec) {
                     $q->orWhere('sector', 'like', '%' . $sec . '%');
@@ -282,7 +280,7 @@ class MatchDostInterventionsTool implements FunctionToolInterface
             })
             ->whereNotNull('project_title')
             ->take(5)
-            ->get();
+            ->get() : collect();
 
         foreach ($matchingProjects as $proj) {
             $score = $this->evaluateProjectRelevance($proj, $domain, $domainSectors, $gapKeywords, $localContext);

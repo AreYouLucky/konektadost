@@ -99,6 +99,10 @@ class LocationAssessor
      */
     private function populationFor(Model $location): ?int
     {
+        if (! Schema::hasTable('population_figures') || ! Schema::hasTable('place_descriptions')) {
+            return null;
+        }
+
         return $location->populationFigure?->population;
     }
 
@@ -118,19 +122,22 @@ class LocationAssessor
 
         [$telecomTotal, $telecom5gShare] = $this->telecomMetricsFor($location);
 
-        return [
-            'health_facilities_per_100k' => (clone $facilities)->ofSector('health')->count(),
-            'hospitals_per_100k' => (clone $facilities)->ofType('hospital')->count(),
-            'pharmacies_per_100k' => (clone $facilities)->ofType('pharmacy')->count(),
-            'schools_per_100k' => (clone $facilities)->ofSector('education')->count(),
-            'elementary_schools_per_100k' => (clone $facilities)->ofLevel('elementary')->count(),
-            'safety_facilities_per_100k' => (clone $facilities)->ofSector('safety')->count(),
-            'laboratories_per_million' => (clone $laboratories)->count(),
-            'laboratory_tests_per_million' => $this->distinctTestCount($location),
-            'telecom_sites_per_100k' => $telecomTotal,
+        $hasSectors = Schema::hasColumn('facilities', 'sector');
+        $hasTypes = Schema::hasColumn('facilities', 'facility_type');
+
+        return array_filter([
+            'health_facilities_per_100k' => $hasSectors ? (clone $facilities)->ofSector('health')->count() : null,
+            'hospitals_per_100k' => $hasTypes ? (clone $facilities)->ofType('hospital')->count() : null,
+            'pharmacies_per_100k' => $hasTypes ? (clone $facilities)->ofType('pharmacy')->count() : null,
+            'schools_per_100k' => $hasSectors ? (clone $facilities)->ofSector('education')->count() : null,
+            'elementary_schools_per_100k' => Schema::hasColumn('facilities', 'level') ? (clone $facilities)->ofLevel('elementary')->count() : null,
+            'safety_facilities_per_100k' => $hasSectors ? (clone $facilities)->ofSector('safety')->count() : null,
+            'laboratories_per_million' => Schema::hasTable('laboratories') ? (clone $laboratories)->count() : null,
+            'laboratory_tests_per_million' => Schema::hasTable('laboratories') && Schema::hasTable('lab_services') ? $this->distinctTestCount($location) : null,
+            'telecom_sites_per_100k' => Schema::hasTable('telecom_sites') ? $telecomTotal : null,
             'telecom_5g_share' => $telecom5gShare,
             'unknown_education_share' => $this->unknownEducationShare($location),
-        ];
+        ], fn ($value) => $value !== null);
     }
 
     /**
@@ -144,29 +151,7 @@ class LocationAssessor
             return [0, null];
         }
 
-        $query = TelecomSite::query();
-        $psgCode = (string) ($location->psg_code ?? '');
-
-        if ($location instanceof Barangay) {
-            $query->where(function ($q) use ($location, $psgCode) {
-                $q->where('barangay_id', $location->id);
-                if ($psgCode !== '') {
-                    $q->orWhere('barangay_psgc', $psgCode);
-                }
-            });
-        } else {
-            $prefix = str_starts_with($psgCode, '13806')
-                ? substr($psgCode, 0, 5)
-                : substr($psgCode, 0, 7);
-
-            $query->where(function ($q) use ($location, $prefix) {
-                $q->where('municipality_id', $location->id);
-                if ($prefix !== '') {
-                    $q->orWhere('barangay_psgc', 'like', $prefix.'%');
-                }
-            });
-        }
-
+        $query = app(\App\FunctionTools\LayerA\GetAvailableDatasetsTool::class)->telecomQueryFor($location);
         $sites = $query->get(['id', 'technologies']);
         $total = $sites->count();
 
@@ -207,6 +192,10 @@ class LocationAssessor
      */
     private function unknownEducationShare(Model $location): float
     {
+        if (! Schema::hasColumns('facilities', ['sector', 'level'])) {
+            return 1.0;
+        }
+
         $total = (clone $location->facilities())->where('sector', 'education')->count();
 
         if ($total === 0) {
@@ -238,6 +227,11 @@ class LocationAssessor
                 status: IndicatorResult::STATUS_NO_DATA,
                 reason: 'No matched population figure is available for this area.',
             );
+        }
+
+        if ($indicator->key !== 'population_density' && ! array_key_exists($indicator->key, $context['counts'])) {
+            return new IndicatorResult(indicator: $indicator, status: IndicatorResult::STATUS_NO_DATA,
+                reason: 'The source dataset or required measurement is unavailable for this indicator.');
         }
 
         $value = match ($indicator->key) {
@@ -304,11 +298,9 @@ class LocationAssessor
      */
     private function dynamicBenchmarkFor(string $indicatorKey): ?float
     {
-        if (self::$computedBenchmarks === null) {
-            self::$computedBenchmarks = $this->computeAllDynamicBenchmarks();
-        }
+        $benchmarks = app(AssessmentReferenceData::class)->remember('assessment_benchmarks', fn () => $this->computeAllDynamicBenchmarks());
 
-        return self::$computedBenchmarks[$indicatorKey] ?? null;
+        return $benchmarks[$indicatorKey] ?? null;
     }
 
     /**
@@ -344,14 +336,17 @@ class LocationAssessor
             'population_density' => $totalAreaKm2 > 0 ? round($nationalPopulation / $totalAreaKm2, 4) : null,
         ];
 
-        if (Schema::hasTable('facilities')) {
+        if (Schema::hasColumns('facilities', ['sector', 'facility_type'])) {
+            $elementaryExpression = Schema::hasColumn('facilities', 'level')
+                ? "SUM(CASE WHEN level = 'elementary' THEN 1 ELSE 0 END) as elem_total"
+                : 'NULL as elem_total';
             $facilityCounts = DB::table('facilities')
                 ->select([
                     DB::raw("SUM(CASE WHEN sector = 'health' THEN 1 ELSE 0 END) as health_total"),
                     DB::raw("SUM(CASE WHEN facility_type = 'hospital' THEN 1 ELSE 0 END) as hospital_total"),
                     DB::raw("SUM(CASE WHEN facility_type = 'pharmacy' THEN 1 ELSE 0 END) as pharmacy_total"),
                     DB::raw("SUM(CASE WHEN sector = 'education' THEN 1 ELSE 0 END) as school_total"),
-                    DB::raw("SUM(CASE WHEN level = 'elementary' THEN 1 ELSE 0 END) as elem_total"),
+                    DB::raw($elementaryExpression),
                     DB::raw("SUM(CASE WHEN sector = 'safety' THEN 1 ELSE 0 END) as safety_total"),
                 ])
                 ->first();

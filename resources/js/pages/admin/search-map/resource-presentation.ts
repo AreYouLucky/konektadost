@@ -4,8 +4,8 @@ export const RESOURCE_CATEGORIES: Record<string, { icon: LucideIcon; label: stri
     health: { icon: HeartPulse, label: 'Health', color: 'text-[#dc4660]', fill: 'bg-[#dc4660]' },
     education: { icon: GraduationCap, label: 'Education', color: 'text-[#287ac5]', fill: 'bg-[#287ac5]' },
     safety: { icon: ShieldCheck, label: 'Safety', color: 'text-[#c17a13]', fill: 'bg-[#c17a13]' },
-    facility: { icon: Building2, label: 'Other facilities', color: 'text-[#1e3a8a]', fill: 'bg-[#1e3a8a]' },
-    laboratory: { icon: FlaskConical, label: 'Laboratories', color: 'text-[#00aeef]', fill: 'bg-[#00aeef]' },
+    facility: { icon: Building2, label: 'Other facilities', color: 'text-[#087dcc]', fill: 'bg-[#087dcc]' },
+    laboratory: { icon: FlaskConical, label: 'Laboratories', color: 'text-[#087dcc]', fill: 'bg-[#087dcc]' },
 };
 
 export const count = new Intl.NumberFormat('en-PH');

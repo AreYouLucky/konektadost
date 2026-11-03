@@ -8,6 +8,7 @@ use App\Models\Barangay;
 use App\Models\Municipality;
 use App\Models\PlaceDescription;
 use App\Models\Province;
+use App\Support\Assessment\AssessmentComputationCache;
 use App\Support\Geometry\PolygonArea;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -73,6 +74,14 @@ class GetMunicipalityProfileTool implements FunctionToolInterface
      */
     public function forLocation(Model $location, bool $includeBarangayList = true): array
     {
+        return app(AssessmentComputationCache::class)->remember(
+            self::class, $location, ['include_barangay_list' => $includeBarangayList],
+            fn () => $this->computeForLocation($location, $includeBarangayList)
+        );
+    }
+
+    private function computeForLocation(Model $location, bool $includeBarangayList): array
+    {
         $level = LocationResolver::levelOf($location);
         $psgCode = (string) ($location->psg_code ?? '');
         $placeDescription = LocationResolver::resolvePlaceDescription($level, $psgCode);
@@ -104,7 +113,7 @@ class GetMunicipalityProfileTool implements FunctionToolInterface
         } elseif ($effectiveAreaKm2 === null && ! empty($location->geometry)) {
             $decoded = is_string($location->geometry) ? json_decode($location->geometry, true) : null;
             if (is_array($decoded)) {
-                $computed = PolygonArea::km2($decoded);
+                $computed = PolygonArea::ofGeometry((object) $decoded);
                 if ($computed !== null && $computed > 0) {
                     $effectiveAreaKm2 = round($computed, 4);
                     $areaBasis = 'computed_from_geometry';

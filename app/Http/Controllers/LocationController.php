@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\FunctionTools\FunctionToolRegistry;
 use App\Models\Barangay;
 use App\Models\CollectionYear;
 use App\Models\DostTech;
@@ -12,14 +11,12 @@ use App\Models\Municipality;
 use App\Models\PlaceDescription;
 use App\Models\Province;
 use App\Models\TelecomSite;
-use App\Support\Assessment\AssessmentFunctionTools;
 use App\Support\Assessment\IndicatorCatalog;
-use App\Support\Assessment\IndicatorResult;
-use App\Support\Assessment\LocationAssessor;
-use App\Support\Assessment\MunicipalityProfileService;
-use App\Support\Assessment\PrioritizationService;
+use App\Support\Assessment\AssessmentAiService;
+use App\Support\Assessment\MunicipalityAssessmentData;
 use App\Support\Assessment\ProjectCatalog;
 use App\Support\Map\MapAssessmentReport;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -85,12 +82,10 @@ class LocationController extends Controller
      * Dimensions without a dataset are reported as unavailable rather than
      * scored, so a gap in the data is never presented as a finding.
      */
-    public function assess(Request $request, LocationAssessor $assessor): Response|RedirectResponse
+    public function assess(Request $request): Response|RedirectResponse
     {
         if ($request->hasAny(['level', 'location'])) {
-            abort_unless($request->user()?->isAdmin(), 403);
-
-            return Inertia::render('location-assessment', app(MapAssessmentReport::class)->props($request));
+            return Inertia::render('location-assessment', app(MapAssessmentReport::class)->props($request, deferMunicipality: true));
         }
         // The city param carries the municipality's psg_code.
         $cityPsgCode = $request->string('city')->trim()->toString();
@@ -106,50 +101,56 @@ class LocationController extends Controller
 
         $focus = $request->string('focus')->trim()->toString();
         $focus = $focus === '' ? IndicatorCatalog::DIMENSION_GENERAL : $focus;
-
-        $profile = app(MunicipalityProfileService::class)->getMunicipalityProfile($municipality);
-        $cityPopulation = $profile['population_statistics']['population_current'] ?? $municipality->populationFigure?->population;
-        $barangayAssessment = app(PrioritizationService::class)->calculatePriorityScores($municipality, $focus);
-        $functionToolsBundle = app(AssessmentFunctionTools::class)->computeLocationBundle($municipality);
-        $layerEResult = app(FunctionToolRegistry::class)->executeLayerE($municipality);
-        $results = array_map(
-            fn (IndicatorResult $result) => $result->toArray(),
-            $assessor->assess($municipality, $focus)
-        );
+        app(MunicipalityAssessmentData::class)->validateFocus($focus);
 
         return Inertia::render('location-assessment', [
-            'location' => [
-                'psg_code' => $municipality->psg_code,
-                'province_psg_code' => $municipality->provinceModel?->psg_code,
+            'pendingAssessment' => [
+                'url' => route('location.assess.data', ['city' => $municipality->psg_code, 'focus' => $focus]),
                 'name' => $municipality->name,
-                'type' => $municipality->type,
                 'province' => $municipality->province_name,
-                'population' => $cityPopulation,
-                'area_km2' => $municipality->area_km2,
-                'income_class' => $profile['income_class'],
-                'city_class' => $profile['city_class'],
-                'urban_rural' => $profile['urban_rural'],
-                'barangay_counts' => $profile['barangay_counts'],
-                'population_statistics' => $profile['population_statistics'],
+                'layout' => 'user',
+                'backUrl' => route('location.show', [
+                    'province' => $municipality->provinceModel?->psg_code, 'city' => $municipality->psg_code,
+                ]),
             ],
-            'municipalityProfile' => $profile,
-            'functionToolsBundle' => $functionToolsBundle,
-            'layerEResult' => $layerEResult,
-            // Which collection year every population figure above belongs to,
-            // so the UI never labels a number with a year the data doesn't have.
-            'populationYear' => CollectionYear::activeYear(),
-            'populationReason' => $cityPopulation === null
-                ? (CollectionYear::activeYear() === null ? 'No active population collection year is configured.'
-                    : 'No verified local population figure is available for the active collection year. Barangay figures are shown separately.')
-                : null,
-            'focus' => $focus,
-            'dimensions' => IndicatorCatalog::dimensions(),
-            'results' => $results,
-            'barangayAssessment' => $barangayAssessment,
+        ]);
+    }
+
+    public function assessmentData(Request $request): JsonResponse
+    {
+        if ($request->hasAny(['level', 'location'])) {
+            $props = app(MapAssessmentReport::class)->props($request);
+
+            return response()->json($props)->header('Cache-Control', 'private, no-store');
+        }
+
+        $municipality = Municipality::query()->where('psg_code', $request->string('city')->trim()->toString())->firstOrFail();
+        $focus = $request->string('focus')->trim()->toString();
+        $focus = $focus === '' ? IndicatorCatalog::DIMENSION_GENERAL : $focus;
+
+        return response()->json([
+            ...app(MunicipalityAssessmentData::class)->props($municipality, $focus),
             'localLaboratories' => $this->buildLocalLaboratories($municipality),
             'dostInterventions' => $this->buildDostInterventions($municipality, $focus),
             'projectCatalog' => app(ProjectCatalog::class)->summary(),
+        ])->header('Cache-Control', 'private, no-store');
+    }
+
+    public function assessmentAi(Request $request, AssessmentAiService $ai): JsonResponse
+    {
+        $validated = $request->validate([
+            'city' => ['required', 'string', 'regex:/^\d{10}$/'],
+            'focus' => ['sometimes', 'string'],
         ]);
+        $focus = $validated['focus'] ?? IndicatorCatalog::DIMENSION_GENERAL;
+        app(MunicipalityAssessmentData::class)->validateFocus($focus);
+        $municipality = Municipality::query()->where('psg_code', $validated['city'])->firstOrFail();
+
+        // Always recompute trusted server evidence; never accept client-supplied findings.
+        $result = $ai->analyze(app(MunicipalityAssessmentData::class)->props($municipality, $focus));
+
+        return response()->json($result, $result['status'] === 'ready' ? 200 : 503)
+            ->header('Cache-Control', 'private, no-store');
     }
 
     /**

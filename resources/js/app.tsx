@@ -1,5 +1,6 @@
 import '../css/app.css';
 
+import AssessmentNavigationLoading from '@/components/assessment-navigation-loading';
 import { createInertiaApp } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
@@ -18,10 +19,15 @@ createInertiaApp({
     setup({ el, App, props }) {
         const root = createRoot(el);
 
-        root.render(<App {...props} />);
+        root.render(
+            <>
+                <App {...props} />
+                <AssessmentNavigationLoading />
+            </>,
+        );
     },
     progress: {
-        color: '#4B5563',
+        color: '#087dcc',
     },
 });
 

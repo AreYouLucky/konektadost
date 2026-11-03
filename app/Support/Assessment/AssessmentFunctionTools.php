@@ -2,6 +2,17 @@
 
 namespace App\Support\Assessment;
 
+use App\FunctionTools\LayerD\SearchDostTechnologiesTool;
+use App\FunctionTools\LayerE\AssessImplementationFeasibilityTool;
+use App\FunctionTools\LayerE\AssessInterventionSuitabilityTool;
+use App\FunctionTools\LayerE\EstimateInterventionRequirementsTool;
+use App\FunctionTools\LayerE\IdentifyImplementationPartnersTool;
+use App\FunctionTools\LayerE\MatchDostInterventionsTool;
+use App\FunctionTools\LayerF\ConductRiskAssessmentTool;
+use App\FunctionTools\LayerF\DefinePerformanceIndicatorsTool;
+use App\FunctionTools\LayerF\EstimateInterventionOutcomesTool;
+use App\FunctionTools\LayerF\GenerateActionPlanTool;
+use App\FunctionTools\LayerF\GenerateInterventionPlanTool;
 use App\Models\Barangay;
 use App\Models\Municipality;
 use App\Models\Province;
@@ -226,17 +237,17 @@ class AssessmentFunctionTools
                 ? $this->prioritizationService->calculatePriorityScores($location)
                 : ['error' => 'calculate_priority_scores requires a Municipality model.'],
             'get_local_dost_projects' => $this->dostCatalogService->getLocalDostProjects($location),
-            'search_dost_technologies' => app(\App\FunctionTools\LayerD\SearchDostTechnologiesTool::class)->execute($arguments),
-            'match_dost_interventions' => app(\App\FunctionTools\LayerE\MatchDostInterventionsTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
-            'assess_intervention_suitability' => app(\App\FunctionTools\LayerE\AssessInterventionSuitabilityTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
-            'assess_implementation_feasibility' => app(\App\FunctionTools\LayerE\AssessImplementationFeasibilityTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
-            'identify_implementation_partners' => app(\App\FunctionTools\LayerE\IdentifyImplementationPartnersTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
-            'estimate_intervention_requirements' => app(\App\FunctionTools\LayerE\EstimateInterventionRequirementsTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
-            'generate_intervention_plan' => app(\App\FunctionTools\LayerF\GenerateInterventionPlanTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
-            'define_performance_indicators' => app(\App\FunctionTools\LayerF\DefinePerformanceIndicatorsTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
-            'estimate_intervention_outcomes' => app(\App\FunctionTools\LayerF\EstimateInterventionOutcomesTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
-            'conduct_risk_assessment' => app(\App\FunctionTools\LayerF\ConductRiskAssessmentTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
-            'generate_action_plan' => app(\App\FunctionTools\LayerF\GenerateActionPlanTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
+            'search_dost_technologies' => app(SearchDostTechnologiesTool::class)->execute($arguments),
+            'match_dost_interventions' => app(MatchDostInterventionsTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
+            'assess_intervention_suitability' => app(AssessInterventionSuitabilityTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
+            'assess_implementation_feasibility' => app(AssessImplementationFeasibilityTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
+            'identify_implementation_partners' => app(IdentifyImplementationPartnersTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
+            'estimate_intervention_requirements' => app(EstimateInterventionRequirementsTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
+            'generate_intervention_plan' => app(GenerateInterventionPlanTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
+            'define_performance_indicators' => app(DefinePerformanceIndicatorsTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
+            'estimate_intervention_outcomes' => app(EstimateInterventionOutcomesTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
+            'conduct_risk_assessment' => app(ConductRiskAssessmentTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
+            'generate_action_plan' => app(GenerateActionPlanTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
             default => throw new InvalidArgumentException("Unknown assessment function tool: {$toolName}"),
         };
     }
@@ -247,7 +258,7 @@ class AssessmentFunctionTools
      *
      * @return array<string, mixed>
      */
-    public function computeLocationBundle(Model $location): array
+    public function computeLocationBundle(Model $location, bool $includeActionPlan = true): array
     {
         return [
             'dataset_audit' => $this->datasetService->getAvailableDatasets($location),
@@ -268,8 +279,8 @@ class AssessmentFunctionTools
             'priority_scores' => $location instanceof Municipality ? $this->prioritizationService->calculatePriorityScores($location) : null,
             'local_dost_projects' => $this->dostCatalogService->getLocalDostProjects($location),
             'dost_technologies' => $this->dostCatalogService->searchDostTechnologies(['limit' => 30]),
-            'matched_interventions' => $location instanceof Municipality ? app(\App\FunctionTools\LayerE\MatchDostInterventionsTool::class)->execute(['municipality_id' => $location->id]) : null,
-            'action_plan' => $location instanceof Municipality ? app(\App\FunctionTools\LayerF\GenerateActionPlanTool::class)->execute(['municipality_id' => $location->id]) : null,
+            'matched_interventions' => $location instanceof Municipality ? app(MatchDostInterventionsTool::class)->execute(['municipality_id' => $location->id]) : null,
+            'action_plan' => $includeActionPlan && $location instanceof Municipality ? app(GenerateActionPlanTool::class)->execute(['municipality_id' => $location->id]) : null,
         ];
     }
 
@@ -317,4 +328,3 @@ class AssessmentFunctionTools
         throw new InvalidArgumentException('Could not resolve location from arguments. Provide a valid psg_code or level + location_id.');
     }
 }
-

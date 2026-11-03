@@ -10,6 +10,8 @@
         "resources/js/components/philippine-map/**/*.tsx",
         "resources/js/pages/admin/search-map/**/*.ts",
         "resources/js/pages/admin/search-map/**/*.tsx",
+        "resources/js/pages/users/intellegence-map/**/*.tsx",
+        "resources/js/components/intelligence-map.tsx",
         "resources/js/pages/admin/assessment.tsx",
         "resources/js/pages/location-assessment.tsx",
         "resources/js/components/data-bars.tsx",

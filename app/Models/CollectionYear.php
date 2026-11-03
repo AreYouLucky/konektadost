@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Support\Assessment\AssessmentReferenceData;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * A population collection year the application can show.
@@ -42,17 +44,18 @@ class CollectionYear extends Model
      */
     public static function activeYear(): ?int
     {
-        if (! self::$activeYearResolved) {
+        if (! Schema::hasTable('collection_years')) {
+            return null;
+        }
+
+        return app(AssessmentReferenceData::class)->remember('active_population_year', function () {
             $year = static::query()
                 ->where('is_active', 1)
                 ->orderByDesc('year')
                 ->value('year');
 
-            self::$activeYear = $year === null ? null : (int) $year;
-            self::$activeYearResolved = true;
-        }
-
-        return self::$activeYear;
+            return $year === null ? null : (int) $year;
+        });
     }
 
     /**
@@ -60,8 +63,7 @@ class CollectionYear extends Model
      */
     public static function flushActiveYearCache(): void
     {
-        self::$activeYear = null;
-        self::$activeYearResolved = false;
+        app(AssessmentReferenceData::class)->forget('active_population_year');
     }
 
     /**

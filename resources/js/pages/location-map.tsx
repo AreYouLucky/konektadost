@@ -160,12 +160,12 @@ export default function LocationMapPage({ provinces, selectedProvince, municipal
                                             onClick={() => setShowLabs((prev) => !prev)}
                                             className={`flex w-full items-center justify-between rounded-lg border px-2.5 py-2 text-left text-xs transition-all ${
                                                 showLabs
-                                                    ? 'border-[#00aeef]/50 bg-[#00aeef]/10 text-blue-950 dark:text-cyan-100'
+                                                    ? 'border-[#087dcc]/50 bg-[#087dcc]/10 text-[#087dcc] dark:text-cyan-100'
                                                     : 'hover:bg-muted/70 text-muted-foreground border-transparent'
                                             }`}
                                         >
                                             <span className="flex items-center gap-2.5">
-                                                <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-[#00aeef] text-white">
+                                                <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-[#087dcc] text-white">
                                                     <FlaskConical className="size-3.5" />
                                                 </span>
                                                 <span className="flex flex-col">
@@ -175,7 +175,7 @@ export default function LocationMapPage({ provinces, selectedProvince, municipal
                                             </span>
                                             <Badge
                                                 variant={showLabs ? 'default' : 'secondary'}
-                                                className={showLabs ? 'bg-[#00aeef] text-[#0b2454]' : ''}
+                                                className={showLabs ? 'bg-[#087dcc] text-white' : ''}
                                             >
                                                 {labsCount}
                                             </Badge>
@@ -186,12 +186,12 @@ export default function LocationMapPage({ provinces, selectedProvince, municipal
                                             onClick={() => setShowTechs((prev) => !prev)}
                                             className={`flex w-full items-center justify-between rounded-lg border px-2.5 py-2 text-left text-xs transition-all ${
                                                 showTechs
-                                                    ? 'border-[#00aeef]/50 bg-[#00aeef]/10 text-blue-950 dark:text-blue-100'
+                                                    ? 'border-[#087dcc]/50 bg-[#087dcc]/10 text-[#087dcc] dark:text-blue-100'
                                                     : 'hover:bg-muted/70 text-muted-foreground border-transparent'
                                             }`}
                                         >
                                             <span className="flex items-center gap-2.5">
-                                                <span className="flex size-6 shrink-0 rotate-45 items-center justify-center rounded-xs bg-[#00aeef] text-white">
+                                                <span className="flex size-6 shrink-0 rotate-45 items-center justify-center rounded-xs bg-[#087dcc] text-white">
                                                     <Cpu className="size-3.5 -rotate-45" />
                                                 </span>
                                                 <span className="flex flex-col">
@@ -201,7 +201,7 @@ export default function LocationMapPage({ provinces, selectedProvince, municipal
                                             </span>
                                             <Badge
                                                 variant={showTechs ? 'default' : 'secondary'}
-                                                className={showTechs ? 'bg-[#00aeef] text-[#0b2454]' : ''}
+                                                className={showTechs ? 'bg-[#087dcc] text-white' : ''}
                                             >
                                                 {techsCount}
                                             </Badge>
@@ -235,12 +235,12 @@ export default function LocationMapPage({ provinces, selectedProvince, municipal
                                             onClick={() => setShowFacilities((prev) => !prev)}
                                             className={`flex w-full items-center justify-between rounded-lg border px-2.5 py-2 text-left text-xs transition-all ${
                                                 showFacilities
-                                                    ? 'border-blue-500/50 bg-blue-500/10 text-blue-950 dark:text-blue-100'
+                                                    ? 'border-[#087dcc]/50 bg-[#087dcc]/10 text-[#087dcc] dark:text-blue-100'
                                                     : 'hover:bg-muted/70 text-muted-foreground border-transparent'
                                             }`}
                                         >
                                             <span className="flex items-center gap-2.5">
-                                                <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-blue-900 text-white">
+                                                <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-[#087dcc] text-white">
                                                     <Building2 className="size-3.5" />
                                                 </span>
                                                 <span className="flex flex-col">
@@ -250,7 +250,7 @@ export default function LocationMapPage({ provinces, selectedProvince, municipal
                                                     </span>
                                                 </span>
                                             </span>
-                                            <Badge variant={showFacilities ? 'default' : 'secondary'} className={showFacilities ? 'bg-blue-900' : ''}>
+                                            <Badge variant={showFacilities ? 'default' : 'secondary'} className={showFacilities ? 'bg-[#087dcc]' : ''}>
                                                 {facilitiesCount}
                                             </Badge>
                                         </button>
@@ -264,7 +264,7 @@ export default function LocationMapPage({ provinces, selectedProvince, municipal
                                                     setShowTelecom(true);
                                                     setShowFacilities(true);
                                                 }}
-                                                className="font-medium text-blue-700 hover:underline"
+                                                className="font-medium text-[#087dcc] hover:underline"
                                             >
                                                 Show all
                                             </button>

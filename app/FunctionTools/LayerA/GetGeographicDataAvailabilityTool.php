@@ -77,7 +77,7 @@ class GetGeographicDataAvailabilityTool implements FunctionToolInterface
         if ($storedAreaKm2 === null && $hasGeometry) {
             $decoded = is_string($location->geometry) ? json_decode($location->geometry, true) : null;
             if (is_array($decoded)) {
-                $area = PolygonArea::km2($decoded);
+                $area = PolygonArea::ofGeometry((object) $decoded);
                 if ($area !== null && $area > 0) {
                     $computedGeometryAreaKm2 = round($area, 4);
                 }

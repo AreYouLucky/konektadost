@@ -93,9 +93,9 @@ class IdentifyUnderservedAreasTool implements FunctionToolInterface
 
         $datasetsTool = app(GetAvailableDatasetsTool::class);
         $datasetAudit = $datasetsTool->forLocation($location);
-        $hasRoadData = ($datasetAudit['datasets']['roads']['status'] ?? 'empty') !== 'empty';
-        $hasTelecomData = ($datasetAudit['datasets']['telecom_sites']['status'] ?? 'empty') !== 'empty';
-        $hasAgriData = ($datasetAudit['datasets']['agriculture_count_estimates']['status'] ?? 'empty') !== 'empty';
+        $hasRoadData = in_array($datasetAudit['datasets']['roads']['status'] ?? null, ['available', 'partial'], true);
+        $hasTelecomData = in_array($datasetAudit['datasets']['telecom_sites']['status'] ?? null, ['available', 'partial'], true);
+        $hasAgriData = in_array($datasetAudit['datasets']['agriculture_count_estimates']['status'] ?? null, ['available', 'partial'], true);
 
         $hasFacilities = Schema::hasTable('facilities');
         $hasRoads = Schema::hasTable('road_barangay');
@@ -110,15 +110,7 @@ class IdentifyUnderservedAreasTool implements FunctionToolInterface
         $telecomByBarangayId = [];
         $telecomByPsgc = [];
         if ($hasTelecom) {
-            $telecomRows = TelecomSite::query()
-                ->select(['id', 'barangay_id', 'barangay_psgc'])
-                ->where(function ($q) use ($location, $prefix) {
-                    $q->where('municipality_id', $location->id);
-                    if ($prefix !== '') {
-                        $q->orWhere('barangay_psgc', 'like', $prefix.'%');
-                    }
-                })
-                ->get();
+            $telecomRows = $datasetsTool->telecomQueryFor($location)->get();
 
             foreach ($telecomRows as $site) {
                 if ($site->barangay_id !== null) {

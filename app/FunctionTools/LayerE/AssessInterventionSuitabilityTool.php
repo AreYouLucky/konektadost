@@ -180,7 +180,7 @@ class AssessInterventionSuitabilityTool implements FunctionToolInterface
     {
         if ($id) {
             // Check Technology
-            $tech = Technology::where('code', $id)->orWhere('id', is_numeric($id) ? (int)$id : 0)->first();
+            $tech = Schema::hasTable('technologies') ? Technology::where('code', $id)->orWhere('id', is_numeric($id) ? (int)$id : 0)->first() : null;
             if ($tech) {
                 return [
                     'id' => $tech->code ?? ('TECH-' . $tech->id),
@@ -194,7 +194,7 @@ class AssessInterventionSuitabilityTool implements FunctionToolInterface
             }
 
             // Check DostTech
-            $dtech = DostTech::where('code', $id)->orWhere('id', is_numeric($id) ? (int)$id : 0)->first();
+            $dtech = Schema::hasTable('dost_techs') ? DostTech::where('code', $id)->orWhere('id', is_numeric($id) ? (int)$id : 0)->first() : null;
             if ($dtech) {
                 return [
                     'id' => $dtech->code ?? ('DTECH-' . $dtech->id),
@@ -208,7 +208,7 @@ class AssessInterventionSuitabilityTool implements FunctionToolInterface
             }
 
             // Check DostProject
-            if (str_starts_with($id, 'PROJ-')) {
+            if (str_starts_with($id, 'PROJ-') && Schema::hasTable('dost_projects')) {
                 $projId = (int)str_replace('PROJ-', '', $id);
                 $proj = DostProject::find($projId);
                 if ($proj) {
@@ -330,7 +330,8 @@ class AssessInterventionSuitabilityTool implements FunctionToolInterface
         $enablers = [];
         $constraints = [];
 
-        $telecomCount = TelecomSite::where('municipality_id', $municipality->id)->count();
+        $telecomCount = Schema::hasTable('telecom_sites')
+            ? app(\App\FunctionTools\LayerA\GetAvailableDatasetsTool::class)->telecomQueryFor($municipality)->count() : null;
         $roadCount = 0;
         if (Schema::hasTable('roads')) {
             $roadCount = DB::table('roads')->where('municipality_id', $municipality->id)->count();
@@ -370,9 +371,9 @@ class AssessInterventionSuitabilityTool implements FunctionToolInterface
 
         $facilityQuery = Facility::where('municipality_id', $municipality->id);
         if ($type) {
-            $facilityQuery->where('facility_type', $type);
+            $facilityQuery->where('sector', $type);
         }
-        $facilityCount = $facilityQuery->count();
+        $facilityCount = Schema::hasTable('facilities') ? $facilityQuery->count() : null;
 
         $score = 55;
         if ($facilityCount > 0) {

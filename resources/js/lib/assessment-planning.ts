@@ -36,9 +36,9 @@ export interface ProjectCatalogData {
 export type EvidenceState = 'priority' | 'within' | 'review' | 'reference' | 'missing';
 export const EVIDENCE_STATES: Record<EvidenceState, { label: string; color: string }> = {
     priority: { label: 'High-confidence flags', color: '#d97706' },
-    within: { label: 'Within comparison', color: '#123575' },
+    within: { label: 'Within comparison', color: '#087dcc' },
     review: { label: 'Low-confidence comparisons', color: '#64748b' },
-    reference: { label: 'Measured; no reference', color: '#00aeef' },
+    reference: { label: 'Measured; no reference', color: '#087dcc' },
     missing: { label: 'No measurement', color: '#cbd5e1' },
 };
 

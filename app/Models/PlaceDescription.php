@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
+use App\Support\Assessment\AssessmentReferenceData;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -74,12 +76,16 @@ class PlaceDescription extends Model
 
     public static function latestReleaseId(): int
     {
-        return self::$latestReleaseId ??= (int) static::query()->max('release_id');
+        if (! Schema::hasTable('place_descriptions')) {
+            return 0;
+        }
+
+        return app(AssessmentReferenceData::class)->remember('latest_psgc_release', fn () => (int) static::query()->max('release_id'));
     }
 
     public static function flushLatestReleaseCache(): void
     {
-        self::$latestReleaseId = null;
+        app(AssessmentReferenceData::class)->forget('latest_psgc_release');
     }
 
     /**

@@ -46,7 +46,7 @@ function MapTool({
         <button
             type="button"
             // Shared toolbar button: edit size, colors and interaction states here.
-            className="group/map-tool relative flex h-[42px] w-[38px] shrink-0 cursor-pointer items-center justify-center rounded-[9px] border-0 bg-transparent text-[#123575] transition-[background-color,color,transform] duration-180 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#123575] enabled:hover:bg-white enabled:hover:text-blue-900 enabled:active:scale-[0.94] disabled:cursor-wait disabled:opacity-45 aria-pressed:bg-[#123575] aria-pressed:text-white motion-reduce:transition-none @[768px]/philippine-map:size-11"
+            className="group/map-tool relative flex h-[42px] w-[38px] shrink-0 cursor-pointer items-center justify-center rounded-[9px] border-0 bg-transparent text-[#087dcc] transition-[background-color,color,transform] duration-180 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#087dcc] enabled:hover:bg-white enabled:hover:text-[#087dcc] enabled:active:scale-[0.94] disabled:cursor-wait disabled:opacity-45 aria-pressed:bg-[#087dcc] aria-pressed:text-white motion-reduce:transition-none @[768px]/philippine-map:size-11"
             aria-label={label}
             title={label}
             aria-pressed={active}
@@ -57,7 +57,7 @@ function MapTool({
         >
             {children}
             <span
-                className="pointer-events-none absolute bottom-[calc(100%+17px)] left-1/2 hidden -translate-x-1/2 translate-y-[5px] rounded-md bg-[#123575] px-2.5 py-[7px] text-[10px] whitespace-nowrap text-[#f1fbf0] opacity-0 transition-[opacity,transform] duration-180 group-hover/map-tool:translate-y-0 group-hover/map-tool:opacity-100 group-focus-visible/map-tool:translate-y-0 group-focus-visible/map-tool:opacity-100 motion-reduce:transition-none @[768px]/philippine-map:block"
+                className="pointer-events-none absolute bottom-[calc(100%+17px)] left-1/2 hidden -translate-x-1/2 translate-y-[5px] rounded-md bg-[#087dcc] px-2.5 py-[7px] text-[10px] whitespace-nowrap text-[#f1fbf0] opacity-0 transition-[opacity,transform] duration-180 group-hover/map-tool:translate-y-0 group-hover/map-tool:opacity-100 group-focus-visible/map-tool:translate-y-0 group-focus-visible/map-tool:opacity-100 motion-reduce:transition-none @[768px]/philippine-map:block"
                 aria-hidden="true"
             >
                 {label}
@@ -158,7 +158,7 @@ export default function MapToolbar({ map, loading, satelliteAvailable, onReset, 
                                 type="button"
                                 aria-label="Close marker legend"
                                 onClick={() => setMarkersOpen(false)}
-                                className="absolute top-2 right-2 grid size-6 place-items-center rounded-md text-[#738580] hover:bg-[#eff6ff] focus-visible:outline-2 focus-visible:outline-[#123575]"
+                                className="absolute top-2 right-2 grid size-6 place-items-center rounded-md text-[#738580] hover:bg-[#eff6ff] focus-visible:outline-2 focus-visible:outline-[#087dcc]"
                             >
                                 <X size={13} />
                             </button>
@@ -193,7 +193,7 @@ export default function MapToolbar({ map, loading, satelliteAvailable, onReset, 
                             <span>Map appearance</span>
                             <button
                                 type="button"
-                                className="grid cursor-pointer place-items-center border-0 bg-transparent p-1 text-[#7b9079] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#123575]"
+                                className="grid cursor-pointer place-items-center border-0 bg-transparent p-1 text-[#7b9079] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#087dcc]"
                                 onClick={() => setLayersOpen(false)}
                                 aria-label="Close map appearance"
                             >
@@ -204,7 +204,7 @@ export default function MapToolbar({ map, loading, satelliteAvailable, onReset, 
                             <button
                                 type="button"
                                 key={mode.value}
-                                className="my-[3px] flex w-full cursor-pointer items-center gap-3 rounded-[10px] border border-transparent bg-transparent p-[9px] text-left text-[#1e3a8a] hover:bg-[#eff6ff] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#123575] aria-pressed:border-[#bfdbfe] aria-pressed:bg-[#dbeafe]"
+                                className="my-[3px] flex w-full cursor-pointer items-center gap-3 rounded-[10px] border border-transparent bg-transparent p-[9px] text-left text-[#087dcc] hover:bg-[#eff6ff] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#087dcc] aria-pressed:border-[#bfdbfe] aria-pressed:bg-[#dbeafe]"
                                 onClick={() => map.setBasemap(mode.value)}
                                 aria-pressed={map.basemap === mode.value}
                             >
@@ -233,17 +233,17 @@ export default function MapToolbar({ map, loading, satelliteAvailable, onReset, 
                             aria-checked={map.showMapLines}
                             disabled={!map.ready}
                             onClick={map.toggleMapLines}
-                            className="group/lines mt-3 flex min-h-11 w-full cursor-pointer items-center justify-between gap-3 border-0 border-t border-[#2b564a1a] bg-transparent pt-3 text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#123575] disabled:cursor-wait disabled:opacity-45"
+                            className="group/lines mt-3 flex min-h-11 w-full cursor-pointer items-center justify-between gap-3 border-0 border-t border-[#2b564a1a] bg-transparent pt-3 text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#087dcc] disabled:cursor-wait disabled:opacity-45"
                         >
                             <span className="flex flex-col gap-[3px]">
-                                <strong className="text-[11px] font-semibold text-[#1e3a8a]">Map lines</strong>
+                                <strong className="text-[11px] font-semibold text-[#087dcc]">Map lines</strong>
                                 <small id={mapLinesDescriptionId} className="text-[9px] text-[#869b7f]">
                                     Ferry routes &amp; boundaries
                                 </small>
                             </span>
                             <span
                                 aria-hidden="true"
-                                className="flex h-[18px] w-8 shrink-0 items-center rounded-full bg-[#cbd5e1] p-0.5 transition-colors group-aria-checked/lines:bg-[#123575] motion-reduce:transition-none"
+                                className="flex h-[18px] w-8 shrink-0 items-center rounded-full bg-[#cbd5e1] p-0.5 transition-colors group-aria-checked/lines:bg-[#087dcc] motion-reduce:transition-none"
                             >
                                 <span className="size-3.5 rounded-full bg-white shadow-sm transition-transform group-aria-checked/lines:translate-x-3.5 motion-reduce:transition-none" />
                             </span>

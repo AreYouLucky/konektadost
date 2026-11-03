@@ -17,7 +17,7 @@ const basisLabels = {
     modeled: 'Modeled agriculture context',
 };
 const format = (value: number | null) => (value === null ? 'Unavailable' : value.toLocaleString('en-PH', { maximumFractionDigits: 3 }));
-const surface = 'min-w-0 rounded-2xl border border-blue-100 bg-white p-5 shadow-[0_4px_20px_-8px_#12357524] dark:bg-slate-950';
+const surface = 'min-w-0 rounded-2xl border border-blue-100 bg-white p-5 shadow-[0_4px_20px_-8px_#087dcc24] dark:bg-slate-950';
 
 export default function AssessmentPlanning({
     locationName,
@@ -47,12 +47,12 @@ export default function AssessmentPlanning({
     return (
         <section aria-labelledby="assessment-planning-heading" className="space-y-5">
             <header className="flex items-start gap-3">
-                <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#123575] text-white">
+                <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#087dcc] text-white">
                     <Target size={22} aria-hidden="true" />
                 </span>
                 <div>
                     <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase">Planning brief</p>
-                    <h2 id="assessment-planning-heading" className="mt-1 text-xl font-semibold tracking-tight text-[#123575] dark:text-blue-200">
+                    <h2 id="assessment-planning-heading" className="mt-1 text-xl font-semibold tracking-tight text-[#087dcc] dark:text-blue-200">
                         Priority review &amp; DOST project options
                     </h2>
                     <p className="mt-1 max-w-4xl text-sm leading-relaxed text-slate-500">
@@ -63,7 +63,7 @@ export default function AssessmentPlanning({
             </header>
 
             <div className={surface}>
-                <h3 className="flex items-center gap-2 font-semibold text-[#123575] dark:text-blue-200">
+                <h3 className="flex items-center gap-2 font-semibold text-[#087dcc] dark:text-blue-200">
                     <ClipboardCheck size={18} aria-hidden="true" /> What needs attention
                 </h3>
                 <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
@@ -123,7 +123,7 @@ export default function AssessmentPlanning({
                 )}
                 {followUp.length > 0 && (
                     <details className="mt-4 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
-                        <summary className="cursor-pointer text-xs font-semibold text-[#123575]">
+                        <summary className="cursor-pointer text-xs font-semibold text-[#087dcc]">
                             <span className="inline-flex items-center gap-2">
                                 <Database size={15} aria-hidden="true" /> Evidence follow-up ({followUp.length} indicators)
                             </span>
@@ -143,11 +143,11 @@ export default function AssessmentPlanning({
 
             <div className={surface}>
                 <header className="flex items-start gap-3">
-                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#00aeef]/10 text-[#123575]">
+                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#087dcc]/10 text-[#087dcc]">
                         <Cpu size={21} aria-hidden="true" />
                     </span>
                     <div>
-                        <h3 className="font-semibold text-[#123575] dark:text-blue-200">DOST options for feasibility review</h3>
+                        <h3 className="font-semibold text-[#087dcc] dark:text-blue-200">DOST options for feasibility review</h3>
                         <p className="mt-1 text-xs leading-relaxed text-slate-500">
                             {catalog.status === 'available'
                                 ? `${projects.length} catalog entries match evidence themes through words in their names, sectors or mechanisms. Each option requires local feasibility review.`
@@ -155,7 +155,7 @@ export default function AssessmentPlanning({
                         </p>
                     </div>
                 </header>
-                <p className="mt-4 flex items-start gap-2 rounded-xl bg-blue-50 p-3 text-xs leading-relaxed text-[#123575]">
+                <p className="mt-4 flex items-start gap-2 rounded-xl bg-blue-50 p-3 text-xs leading-relaxed text-[#087dcc]">
                     <Info size={15} aria-hidden="true" className="mt-0.5 shrink-0" />
                     <span>
                         {catalog.coverage} Source: {catalog.source}.
@@ -177,7 +177,7 @@ export default function AssessmentPlanning({
                         {projects.map(({ project, reasons, locationMatch }) => (
                             <article key={project.id} className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 dark:bg-slate-950">
                                 <p className="text-[10px] font-semibold tracking-wide text-slate-500">{project.code || `Catalog ID ${project.id}`}</p>
-                                <h4 className="mt-1 text-base leading-snug font-semibold text-[#123575] dark:text-blue-200">{project.name}</h4>
+                                <h4 className="mt-1 text-base leading-snug font-semibold text-[#087dcc] dark:text-blue-200">{project.name}</h4>
                                 <p className="mt-2 text-xs text-slate-500">
                                     {project.agency || 'Lead agency not recorded'} · {project.sector || 'Sector not recorded'}
                                 </p>
@@ -200,7 +200,7 @@ export default function AssessmentPlanning({
                                     Catalog status: {project.status || 'not recorded'}.
                                 </p>
                                 <details className="mt-3 border-t border-slate-100 pt-3">
-                                    <summary className="cursor-pointer text-xs font-semibold text-[#123575]">
+                                    <summary className="cursor-pointer text-xs font-semibold text-[#087dcc]">
                                         Mechanism, source outcome &amp; readiness checks
                                     </summary>
                                     <dl className="mt-3 space-y-3 text-xs leading-relaxed">
@@ -227,7 +227,7 @@ export default function AssessmentPlanning({
             </div>
 
             <div className={surface}>
-                <h3 className="flex items-center gap-2 font-semibold text-[#123575] dark:text-blue-200">
+                <h3 className="flex items-center gap-2 font-semibold text-[#087dcc] dark:text-blue-200">
                     <FlaskConical size={18} aria-hidden="true" /> From evidence to a local project brief
                 </h3>
                 <ol className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -250,7 +250,7 @@ export default function AssessmentPlanning({
                         ],
                     ].map(([title, detail], index) => (
                         <li key={title} className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900">
-                            <span className="mb-3 grid size-7 place-items-center rounded-lg bg-[#123575] text-xs font-semibold text-white">
+                            <span className="mb-3 grid size-7 place-items-center rounded-lg bg-[#087dcc] text-xs font-semibold text-white">
                                 {index + 1}
                             </span>
                             <h4 className="text-sm font-semibold">{title}</h4>

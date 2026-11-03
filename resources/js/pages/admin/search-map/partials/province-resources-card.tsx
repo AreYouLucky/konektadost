@@ -43,6 +43,8 @@ export default function ProvinceResourcesCard({
     retry,
     open,
     onOpenChange,
+    showAssessmentLink = true,
+    assessmentMap = 'admin',
 }: {
     selection: MapLocation;
     parents: string[];
@@ -53,6 +55,8 @@ export default function ProvinceResourcesCard({
     retry: () => void;
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    showAssessmentLink?: boolean;
+    assessmentMap?: 'user' | 'admin';
 }) {
     const panelId = useId();
     const scrollArea = useRef<HTMLDivElement>(null);
@@ -68,7 +72,7 @@ export default function ProvinceResourcesCard({
                     type="button"
                     onClick={() => onOpenChange(true)}
                     aria-expanded={false}
-                    className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/20 bg-[#123575] px-4 py-2 text-xs font-semibold text-white hover:bg-[#0b2454] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#123575]"
+                    className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/20 bg-[#087dcc] px-4 py-2 text-xs font-semibold text-white hover:bg-[#087dcc]/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#087dcc]"
                 >
                     <PanelRightOpen size={17} /> Location details
                 </button>
@@ -80,15 +84,15 @@ export default function ProvinceResourcesCard({
             id={panelId}
             aria-label={`Details for ${selection.name}`}
             aria-busy={loading}
-            className="absolute top-4 right-4 bottom-[110px] z-[18] flex min-h-0 w-[min(390px,calc(100cqw-32px))] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 text-slate-800 shadow-[0_16px_60px_#12357524] @[1100px]/philippine-map:top-6 @[1100px]/philippine-map:right-6 [&_button]:cursor-pointer"
+            className="absolute top-4 right-4 bottom-[110px] z-[18] flex min-h-0 w-[min(390px,calc(100cqw-32px))] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 text-slate-800 shadow-[0_16px_60px_#087dcc24] @[1100px]/philippine-map:top-6 @[1100px]/philippine-map:right-6 [&_button]:cursor-pointer"
         >
             <header className="flex shrink-0 items-start gap-3 border-b border-slate-100 px-4 py-4">
-                <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl bg-blue-50 text-[#123575]">
+                <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl bg-blue-50 text-[#087dcc]">
                     <MapPin size={19} aria-hidden="true" />
                 </span>
                 <div className="min-w-0 flex-1">
                     <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase">{LOCATION_LABELS[selection.level]}</p>
-                    <h2 className="mt-1 text-xl leading-tight font-semibold tracking-tight text-[#123575]">{selection.name}</h2>
+                    <h2 className="mt-1 text-xl leading-tight font-semibold tracking-tight text-[#087dcc]">{selection.name}</h2>
                     {parents.length > 0 && <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">{parents.join(' / ')}</p>}
                 </div>
                 <button
@@ -97,7 +101,7 @@ export default function ProvinceResourcesCard({
                     aria-label="Collapse location details"
                     aria-expanded={true}
                     aria-controls={panelId}
-                    className="flex size-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-blue-50 hover:text-[#123575] focus-visible:outline-2 focus-visible:outline-[#123575]"
+                    className="flex size-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-blue-50 hover:text-[#087dcc] focus-visible:outline-2 focus-visible:outline-[#087dcc]"
                 >
                     <PanelRightClose size={18} />
                 </button>
@@ -110,7 +114,7 @@ export default function ProvinceResourcesCard({
                         aria-current={tab === item.key ? 'page' : undefined}
                         aria-controls={`${panelId}-content`}
                         onClick={() => openTab(item.key)}
-                        className={`flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[10px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-[#123575] ${tab === item.key ? 'bg-[#123575] text-white' : item.key === 'technologies' ? 'bg-blue-50 text-[#123575] hover:bg-blue-100' : 'text-slate-500 hover:bg-blue-50 hover:text-[#123575]'}`}
+                        className={`flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[10px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-[#087dcc] ${tab === item.key ? 'bg-[#087dcc] text-white' : item.key === 'technologies' ? 'bg-blue-50 text-[#087dcc] hover:bg-blue-100' : 'text-slate-500 hover:bg-blue-50 hover:text-[#087dcc]'}`}
                     >
                         <item.icon size={16} aria-hidden="true" />
                         {item.label}
@@ -130,7 +134,7 @@ export default function ProvinceResourcesCard({
                 {error && (
                     <div role="alert" className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900">
                         <p>{error}</p>
-                        <button type="button" onClick={retry} className="mt-2 font-semibold text-[#123575] underline">
+                        <button type="button" onClick={retry} className="mt-2 font-semibold text-[#087dcc] underline">
                             Try again
                         </button>
                     </div>
@@ -152,15 +156,17 @@ export default function ProvinceResourcesCard({
                 )}
                 {tab === 'agriculture' && <ProvinceAgricultureCard agriculture={agriculture} />}
             </div>
-            <footer className="shrink-0 space-y-2 border-t border-slate-100 bg-white p-4">
-                <Link
-                    href={route('location.assess', { level: selection.level, location: selection.id, focus: 'general' })}
-                    className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#123575] px-3 text-xs font-semibold text-white hover:bg-[#0b2454] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#123575]"
-                >
-                    <ClipboardList size={16} aria-hidden="true" /> View location assessment
-                </Link>
-                <p className="text-center text-[10px] leading-relaxed text-slate-500">Indicators, benchmarks and local resource totals</p>
-            </footer>
+            {showAssessmentLink && (
+                <footer className="shrink-0 space-y-2 border-t border-slate-100 bg-white p-4">
+                    <Link
+                        href={route('location.assess', { level: selection.level, location: selection.id, focus: 'general', map: assessmentMap })}
+                        className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#087dcc] px-3 text-xs font-semibold text-white hover:bg-[#087dcc]/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#087dcc]"
+                    >
+                        <ClipboardList size={16} aria-hidden="true" /> View location assessment
+                    </Link>
+                    <p className="text-center text-[10px] leading-relaxed text-slate-500">Indicators, benchmarks and local resource totals</p>
+                </footer>
+            )}
         </aside>
     );
 }
@@ -171,11 +177,11 @@ function PopulationOverview({ data }: { data: ProvinceResourceData }) {
     return (
         <section aria-label="Population" className="rounded-xl border border-blue-100 bg-white p-4">
             <div className="flex items-center gap-2.5">
-                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-blue-50 text-[#123575]">
+                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-blue-50 text-[#087dcc]">
                     <Users size={18} aria-hidden="true" />
                 </span>
                 <div>
-                    <h3 className="text-sm font-semibold text-[#123575]">People &amp; population</h3>
+                    <h3 className="text-sm font-semibold text-[#087dcc]">People &amp; population</h3>
                     <p className="mt-0.5 text-[11px] text-slate-500">Recorded residents in the selected area</p>
                 </div>
             </div>

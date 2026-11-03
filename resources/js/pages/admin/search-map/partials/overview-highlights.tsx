@@ -11,11 +11,11 @@ export function TechnologyHighlight({ data }: { data: ProvinceResourceData }) {
     return (
         <section aria-label="DOST technology highlight" className="rounded-xl border border-blue-100 bg-white p-4">
             <div className="flex items-center gap-2.5">
-                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-blue-50 text-[#123575]">
+                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-blue-50 text-[#087dcc]">
                     <Cpu size={18} aria-hidden="true" />
                 </span>
                 <div>
-                    <h3 className="text-sm font-semibold text-[#123575]">DOST technologies</h3>
+                    <h3 className="text-sm font-semibold text-[#087dcc]">DOST technologies</h3>
                     <p className="mt-0.5 text-[11px] text-slate-500">Catalog matches for this location</p>
                 </div>
             </div>
@@ -24,7 +24,7 @@ export function TechnologyHighlight({ data }: { data: ProvinceResourceData }) {
                     <dl className="mt-4 grid grid-cols-2 gap-3 rounded-lg bg-blue-50/60 p-3">
                         <div className="flex flex-col">
                             <dt className="order-last mt-1 text-[11px] text-slate-600">Catalog matches</dt>
-                            <dd className="text-2xl font-semibold tracking-tight text-[#123575] tabular-nums">
+                            <dd className="text-2xl font-semibold tracking-tight text-[#087dcc] tabular-nums">
                                 {technologies.count === null ? '—' : count.format(technologies.count)}
                             </dd>
                         </div>
@@ -32,14 +32,14 @@ export function TechnologyHighlight({ data }: { data: ProvinceResourceData }) {
                             <dt className="order-last mt-1 flex items-center gap-1 text-[11px] text-slate-600">
                                 <MapPin size={11} aria-hidden="true" /> City reference pins
                             </dt>
-                            <dd className="text-2xl font-semibold tracking-tight text-[#123575] tabular-nums">
+                            <dd className="text-2xl font-semibold tracking-tight text-[#087dcc] tabular-nums">
                                 {count.format(technologies.pinned_count)}
                             </dd>
                         </div>
                     </dl>
                     {sectors.length > 0 && (
                         <details className="mt-3 border-t border-slate-100 pt-3">
-                            <summary className="cursor-pointer text-[11px] font-medium text-[#123575]">
+                            <summary className="cursor-pointer text-[11px] font-medium text-[#087dcc]">
                                 <span className="inline-flex items-center gap-1.5">
                                     <Layers3 size={13} aria-hidden="true" /> Catalog sectors ({count.format(sectors.length)})
                                 </span>
@@ -75,7 +75,7 @@ export function AgricultureHighlight({ agriculture }: { agriculture: ReturnType<
                     <Wheat size={18} aria-hidden="true" />
                 </span>
                 <div>
-                    <h3 className="text-sm font-semibold text-[#123575]">Crops &amp; livelihood</h3>
+                    <h3 className="text-sm font-semibold text-[#087dcc]">Crops &amp; livelihood</h3>
                     <p className="mt-0.5 text-[10px] text-[#738580]">Modeled agriculture · {data?.model_year ?? 'year not recorded'}</p>
                 </div>
             </div>
@@ -86,7 +86,7 @@ export function AgricultureHighlight({ agriculture }: { agriculture: ReturnType<
             ) : error ? (
                 <p role="alert" className="mt-3 text-xs text-amber-900">
                     {error}{' '}
-                    <button type="button" onClick={retry} className="font-semibold text-[#123575] underline">
+                    <button type="button" onClick={retry} className="font-semibold text-[#087dcc] underline">
                         Retry
                     </button>
                 </p>

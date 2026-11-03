@@ -2,7 +2,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { EVIDENCE_STATES, evidenceState, referenceIndex, type EvidenceState, type IndicatorEvidence } from '@/lib/assessment-planning';
 import { useId } from 'react';
 
-const surface = 'min-w-0 rounded-2xl border-blue-100 bg-white shadow-[0_4px_20px_-8px_#12357524] dark:bg-slate-950';
+const surface = 'min-w-0 rounded-2xl border-blue-100 bg-white shadow-[0_4px_20px_-8px_#087dcc24] dark:bg-slate-950';
 
 export function EvidenceVisuals({ results, dimensions }: { results: IndicatorEvidence[]; dimensions: { key: string; label: string }[] }) {
     const counts = Object.fromEntries(
@@ -14,7 +14,7 @@ export function EvidenceVisuals({ results, dimensions }: { results: IndicatorEvi
         <div className="grid items-stretch gap-4 xl:grid-cols-2">
             <Card className={surface}>
                 <CardContent className="p-5">
-                    <h3 className="font-semibold text-[#123575] dark:text-blue-200">Evidence status</h3>
+                    <h3 className="font-semibold text-[#087dcc] dark:text-blue-200">Evidence status</h3>
                     <p className="mt-1 text-xs leading-relaxed text-slate-500">Indicator counts, not an overall service-adequacy score.</p>
                     <div className="mt-5 flex flex-wrap items-center justify-center gap-5">
                         <svg
@@ -44,7 +44,7 @@ export function EvidenceVisuals({ results, dimensions }: { results: IndicatorEvi
                                     />
                                 ) : null;
                             })}
-                            <text x="80" y="78" textAnchor="middle" fill="#123575" fontSize="30" fontWeight="600">
+                            <text x="80" y="78" textAnchor="middle" fill="#087dcc" fontSize="30" fontWeight="600">
                                 {results.length}
                             </text>
                             <text x="80" y="99" textAnchor="middle" fill="#64748b" fontSize="11">
@@ -69,7 +69,7 @@ export function EvidenceVisuals({ results, dimensions }: { results: IndicatorEvi
             </Card>
             <Card className={surface}>
                 <CardContent className="p-5">
-                    <h3 className="font-semibold text-[#123575] dark:text-blue-200">Where to investigate</h3>
+                    <h3 className="font-semibold text-[#087dcc] dark:text-blue-200">Where to investigate</h3>
                     <p className="mt-1 text-xs leading-relaxed text-slate-500">
                         Evidence status within each assessment theme. Bar segments count indicators; themes have different numbers of indicators.
                     </p>
@@ -127,7 +127,7 @@ export function ReferenceIndexChart({ results }: { results: IndicatorEvidence[] 
             <CardContent className="p-5">
                 <figure aria-labelledby={id}>
                     <figcaption id={id}>
-                        <h3 className="font-semibold text-[#123575] dark:text-blue-200">Local rate against a reference of 100</h3>
+                        <h3 className="font-semibold text-[#087dcc] dark:text-blue-200">Local rate against a reference of 100</h3>
                         <p className="mt-1 text-xs leading-relaxed text-slate-500">
                             100 equals the national rate. Density above 100 indicates pressure; other indicators generally flag rates below 100. Bars
                             stop at 200; labels retain the actual index. This is not a score.

@@ -14,9 +14,9 @@ class SpatialMetrics
     /**
      * Compute a per-capita rate (e.g., per 10,000, 100,000, or 1,000,000 residents).
      */
-    public static function ratePer(int|float $count, ?int $population, int $multiplier): ?float
+    public static function ratePer(int|float|null $count, ?int $population, int $multiplier): ?float
     {
-        if ($population === null || $population <= 0) {
+        if ($count === null || $population === null || $population <= 0) {
             return null;
         }
 

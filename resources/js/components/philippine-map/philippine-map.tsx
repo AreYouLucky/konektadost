@@ -7,7 +7,7 @@ import MapResourceKey from './partials/map-resource-key';
 import MapToolbar from './partials/map-toolbar';
 import SearchBar from './partials/search-bar';
 import './philippine-map.css';
-import { ALL_MARKERS_VISIBLE, markerGroup, type MarkerVisibility } from './resource-marker-designs';
+import { markerGroup, type MarkerVisibility } from './resource-marker-designs';
 import { ADMIN_GEOGRAPHY_API, LEVEL_LABELS, type MapLocation, type MapResourcePin, type PhilippineMapProps } from './types';
 import { useExplorerMap } from './use-explorer-map';
 import { useGeography } from './use-geography';
@@ -43,7 +43,12 @@ export default function PhilippineMap({
     selectionCallback.current = onSelectionChange;
     const [hovered, setHovered] = useState<string | null>(null);
     const [expanded, setExpanded] = useState(false);
-    const [markerVisibility, setMarkerVisibility] = useState<MarkerVisibility>(ALL_MARKERS_VISIBLE);
+    const [markerVisibility, setMarkerVisibility] = useState<MarkerVisibility>({
+        laboratories: true,
+        technologies: true,
+        telecom: false,
+        facilities: false,
+    });
     const selected = geography.path.at(-1) ?? null;
     const scopedPins = useMemo(() => scopeMapPins(resourcePins, selected, geography.boundary), [resourcePins, selected, geography.boundary]);
     const visiblePins = useMemo(() => scopedPins.filter((pin) => markerVisibility[markerGroup(pin.category)]), [scopedPins, markerVisibility]);

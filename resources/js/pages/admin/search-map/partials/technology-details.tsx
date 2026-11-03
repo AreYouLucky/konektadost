@@ -18,7 +18,7 @@ export default function TechnologyDetails({ data }: { data: ProvinceResourceData
                 {technologies.status === 'available' && (
                     <DataBars
                         title="Technologies by sector"
-                        rows={[...sectors].sort((a, b) => b[1] - a[1]).map(([label, value]) => ({ label, value, color: '#2563eb' }))}
+                        rows={[...sectors].sort((a, b) => b[1] - a[1]).map(([label, value]) => ({ label, value, color: '#087dcc' }))}
                     />
                 )}
                 {technologies.status === 'unavailable' && (

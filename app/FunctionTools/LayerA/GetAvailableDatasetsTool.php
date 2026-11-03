@@ -13,6 +13,7 @@ use App\Models\Laboratory;
 use App\Models\Municipality;
 use App\Models\Province;
 use App\Models\TelecomSite;
+use App\Support\Assessment\AssessmentComputationCache;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -69,6 +70,11 @@ class GetAvailableDatasetsTool implements FunctionToolInterface
      * @return array<string, mixed>
      */
     public function forLocation(Model $location): array
+    {
+        return app(AssessmentComputationCache::class)->remember(self::class, $location, [], fn () => $this->computeForLocation($location));
+    }
+
+    private function computeForLocation(Model $location): array
     {
         $level = LocationResolver::levelOf($location);
         $psgCode = (string) ($location->psg_code ?? '');
@@ -425,30 +431,58 @@ class GetAvailableDatasetsTool implements FunctionToolInterface
 
     public function telecomQueryFor(Model $location)
     {
-        $psgCode = (string) ($location->psg_code ?? '');
-        $level = LocationResolver::levelOf($location);
-        $prefix = LocationResolver::psgcPrefixFor($level, $psgCode);
+        $municipalityIds = match (true) {
+            $location instanceof Municipality => [(int) $location->id],
+            $location instanceof Province => Municipality::query()->where('province_id', $location->id)->pluck('id')->all(),
+            $location instanceof Barangay && $location->municipality_id !== null => [(int) $location->municipality_id],
+            default => [],
+        };
+        $barangays = Barangay::query();
+        if ($location instanceof Barangay) {
+            $barangays->whereKey($location->id);
+        } elseif (Schema::hasColumn('barangays', 'municipality_id')) {
+            $barangays->whereIn('municipality_id', $municipalityIds);
+        } else {
+            $barangays->whereRaw('1 = 0');
+        }
+        $hasBarangays = Schema::hasTable('barangays');
+        $barangayIds = $hasBarangays ? (clone $barangays)->pluck('id')->all() : [];
+        $codes = $hasBarangays && Schema::hasColumn('barangays', 'psg_code')
+            ? (clone $barangays)->whereNotNull('psg_code')->pluck('psg_code')->all() : [];
+        $hasMunicipality = Schema::hasColumn('telecom_sites', 'municipality_id');
+        $hasBarangay = Schema::hasColumn('telecom_sites', 'barangay_id');
+        $hasCode = Schema::hasColumn('telecom_sites', 'barangay_psgc');
 
-        return TelecomSite::query()->where(function ($q) use ($location, $psgCode, $prefix) {
-            if ($location instanceof Barangay) {
-                $q->where('barangay_id', $location->id);
-                if ($psgCode !== '') {
-                    $q->orWhere('barangay_psgc', $psgCode);
-                }
-            } elseif ($location instanceof Municipality) {
-                $q->where('municipality_id', $location->id);
-                if ($prefix !== '') {
-                    $q->orWhere('barangay_psgc', 'like', $prefix.'%');
-                }
-            } elseif ($location instanceof Province) {
-                $munIds = Municipality::query()->where('province_id', $location->id)->pluck('id');
-                $q->whereIn('municipality_id', $munIds);
-                if ($prefix !== '') {
-                    $q->orWhere('barangay_psgc', 'like', $prefix.'%');
-                }
-            } else {
-                $q->whereRaw('1 = 0');
+        return TelecomSite::query()->where(function ($q) use ($location, $municipalityIds, $barangayIds, $codes, $hasMunicipality, $hasBarangay, $hasCode) {
+            $q->whereRaw('1 = 0');
+            if ($hasMunicipality && ! $location instanceof Barangay) {
+                $q->orWhereIn('municipality_id', $municipalityIds);
             }
+            $q->orWhere(function ($fallback) use ($location, $municipalityIds, $barangayIds, $codes, $hasMunicipality, $hasBarangay, $hasCode) {
+                // Explicit foreign links must never be overridden by a text/PSGC fallback.
+                if ($hasMunicipality) {
+                    $fallback->where(function ($parent) use ($location, $municipalityIds) {
+                        $parent->whereNull('municipality_id');
+                        if ($location instanceof Barangay) {
+                            $parent->orWhereIn('municipality_id', $municipalityIds);
+                        }
+                    });
+                }
+                $fallback->where(function ($child) use ($barangayIds, $codes, $hasBarangay, $hasCode) {
+                    $child->whereRaw('1 = 0');
+                    if ($hasBarangay) {
+                        $child->orWhereIn('barangay_id', $barangayIds);
+                    }
+                    if ($hasCode) {
+                        $child->orWhere(function ($code) use ($codes, $hasBarangay) {
+                            if ($hasBarangay) {
+                                $code->whereNull('barangay_id');
+                            }
+                            $code->whereIn('barangay_psgc', $codes);
+                        });
+                    }
+                });
+            });
         });
     }
 

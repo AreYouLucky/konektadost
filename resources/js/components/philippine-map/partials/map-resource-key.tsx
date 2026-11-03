@@ -87,7 +87,7 @@ export default function MapResourceKey({
                     <label
                         key={group.key}
                         htmlFor={`${id}-${group.key}`}
-                        className={`flex min-h-9 cursor-pointer items-center gap-2 rounded-lg border px-2 py-1 ${visibility[group.key] ? 'border-[#123575]/15 bg-[#eff6ff]' : 'border-transparent bg-white/50 text-[#738580]'}`}
+                        className={`flex min-h-9 cursor-pointer items-center gap-2 rounded-lg border px-2 py-1 ${visibility[group.key] ? 'border-[#087dcc]/15 bg-[#eff6ff]' : 'border-transparent bg-white/50 text-[#738580]'}`}
                     >
                         <ResourceMarkerSymbol category={group.category} />
                         <span className="flex-1 text-[11px] font-medium">{group.title}</span>
@@ -97,7 +97,7 @@ export default function MapResourceKey({
                             type="checkbox"
                             checked={visibility[group.key]}
                             onChange={(event) => onVisibilityChange({ ...visibility, [group.key]: event.target.checked })}
-                            className="size-3.5 cursor-pointer accent-[#123575]"
+                            className="size-3.5 cursor-pointer accent-[#087dcc]"
                         />
                     </label>
                 ))}
@@ -106,14 +106,14 @@ export default function MapResourceKey({
                 <button
                     type="button"
                     onClick={() => onVisibilityChange({ ...ALL_MARKERS_VISIBLE })}
-                    className="min-h-7 font-semibold text-[#123575] hover:underline"
+                    className="min-h-7 font-semibold text-[#087dcc] hover:underline"
                 >
                     Show all
                 </button>
                 <button
                     type="button"
                     onClick={() => onVisibilityChange({ laboratories: false, technologies: false, telecom: false, facilities: false })}
-                    className="min-h-7 text-blue-700 hover:underline"
+                    className="min-h-7 text-[#087dcc] hover:underline"
                 >
                     Hide all
                 </button>

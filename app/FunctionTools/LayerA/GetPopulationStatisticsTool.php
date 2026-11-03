@@ -8,7 +8,7 @@ use App\Models\Barangay;
 use App\Models\CollectionYear;
 use App\Models\Municipality;
 use App\Models\PlaceDescription;
-use App\Models\Province;
+use App\Support\Assessment\AssessmentComputationCache;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -73,6 +73,14 @@ class GetPopulationStatisticsTool implements FunctionToolInterface
      */
     public function forLocation(Model $location, bool $includeBarangayDistribution = true): array
     {
+        return app(AssessmentComputationCache::class)->remember(
+            self::class, $location, ['include_barangay_distribution' => $includeBarangayDistribution],
+            fn () => $this->computeForLocation($location, $includeBarangayDistribution)
+        );
+    }
+
+    private function computeForLocation(Model $location, bool $includeBarangayDistribution): array
+    {
         $level = LocationResolver::levelOf($location);
         $psgCode = (string) ($location->psg_code ?? '');
         $activeYear = Schema::hasTable('collection_years') ? CollectionYear::activeYear() : null;
@@ -100,52 +108,37 @@ class GetPopulationStatisticsTool implements FunctionToolInterface
             return $empty;
         }
 
-        $prefix = in_array($level, ['municipality', 'province'], true)
-            ? LocationResolver::psgcPrefixFor($level, $psgCode)
-            : '';
-
-        $rows = DB::table('population_figures')
-            ->where(function ($q) use ($psgCode, $prefix) {
-                if ($prefix !== '') {
-                    $q->where('psg_code', 'like', $prefix.'%');
-                } else {
-                    $q->where('psg_code', $psgCode);
-                }
-            })
-            ->whereNotNull('population')
-            ->select([
-                'year',
-                DB::raw('SUM(CASE WHEN psg_code = '.DB::getPdo()->quote($psgCode).' THEN population ELSE 0 END) as direct_pop'),
-                DB::raw('SUM(CASE WHEN psg_code = '.DB::getPdo()->quote($psgCode).' THEN 1 ELSE 0 END) as direct_count'),
-                DB::raw('SUM(CASE WHEN psg_code <> '.DB::getPdo()->quote($psgCode).' THEN population ELSE 0 END) as child_pop'),
-                DB::raw('SUM(CASE WHEN psg_code <> '.DB::getPdo()->quote($psgCode).' THEN 1 ELSE 0 END) as child_count'),
-            ])
-            ->groupBy('year')
-            ->orderBy('year')
-            ->get();
-
         $historyMap = [];
+        $levels = match ($level) {
+            'barangay' => [PlaceDescription::LEVEL_BARANGAY],
+            'province' => [PlaceDescription::LEVEL_PROVINCE, PlaceDescription::LEVEL_REGION],
+            default => PlaceDescription::LGU_LEVELS,
+        };
+        // A PSGC can occur in multiple releases. Never add duplicate releases or other levels together.
+        $rows = $this->populationRows([$psgCode], $levels);
         foreach ($rows as $row) {
-            $yr = (int) $row->year;
-            if ((int) $row->direct_count > 0 && (int) $row->direct_pop > 0) {
-                $historyMap[$yr] = [
-                    'year' => $yr,
-                    'population' => (int) $row->direct_pop,
-                    'basis' => 'official_lgu_figure',
-                    'records_counted' => (int) $row->direct_count,
-                ];
-            } elseif (in_array($level, ['municipality', 'province'], true) && (int) $row->child_count > 0 && (int) $row->child_pop > 0) {
-                $historyMap[$yr] = [
-                    'year' => $yr,
-                    'population' => (int) $row->child_pop,
-                    'basis' => 'barangay_sum',
-                    'records_counted' => (int) $row->child_count,
-                ];
+            $year = (int) $row->year;
+            if (isset($historyMap[$year]) || ($year === $activeYear && (int) $row->release_id !== PlaceDescription::latestReleaseId())) {
+                continue;
             }
+            $historyMap[$year] = ['year' => $year, 'population' => (int) $row->population,
+                'basis' => 'official_lgu_figure', 'records_counted' => 1];
         }
 
-        if ($historyMap === []) {
-            return $empty;
+        // Historic barangay sums are a labelled baseline only, and require every linked barangay.
+        // Missing current LGU population must remain unknown in every assessment tool.
+        if ($level !== 'barangay' && $activeYear !== null) {
+            $codes = $this->barangayCodes($location);
+            if ($codes !== []) {
+                $children = $this->populationRows($codes, [PlaceDescription::LEVEL_BARANGAY])
+                    ->unique(fn ($row) => $row->psg_code.':'.$row->year)->groupBy('year');
+                foreach ($children as $year => $figures) {
+                    if ((int) $year < $activeYear && ! isset($historyMap[$year]) && $figures->count() === count($codes)) {
+                        $historyMap[$year] = ['year' => (int) $year, 'population' => (int) $figures->sum('population'),
+                            'basis' => 'barangay_sum', 'records_counted' => $figures->count()];
+                    }
+                }
+            }
         }
 
         ksort($historyMap);
@@ -157,15 +150,6 @@ class GetPopulationStatisticsTool implements FunctionToolInterface
         $currentBasis = $activeYear !== null && isset($historyMap[$activeYear])
             ? $historyMap[$activeYear]['basis']
             : null;
-
-        if ($currentPop === null && $activeYear === null) {
-            $last = end($history);
-            if ($last !== false) {
-                $activeYear = $last['year'];
-                $currentPop = $last['population'];
-                $currentBasis = $last['basis'];
-            }
-        }
 
         $baselineYear = null;
         $baselinePop = null;
@@ -221,6 +205,31 @@ class GetPopulationStatisticsTool implements FunctionToolInterface
         return $result;
     }
 
+    private function populationRows(array $codes, array $levels): \Illuminate\Support\Collection
+    {
+        return DB::table('population_figures as pf')
+            ->join('place_descriptions as pd', 'pd.id', '=', 'pf.place_description_id')
+            ->whereColumn('pd.psg_code', 'pf.psg_code')->whereIn('pf.psg_code', $codes)
+            ->whereIn('pd.level', $levels)->whereNotNull('pf.population')
+            ->orderByDesc('pd.release_id')->orderByDesc('pf.id')
+            ->get(['pf.psg_code', 'pf.year', 'pf.population', 'pd.release_id']);
+    }
+
+    private function barangayCodes(Model $location): array
+    {
+        if (! Schema::hasColumns('barangays', ['municipality_id', 'psg_code'])) {
+            return [];
+        }
+        $query = Barangay::query();
+        if ($location instanceof Municipality) {
+            $query->where('municipality_id', $location->id);
+        } else {
+            $query->whereIn('municipality_id', Municipality::query()->select('id')->where('province_id', $location->id));
+        }
+
+        return $query->whereNotNull('psg_code')->distinct()->pluck('psg_code')->all();
+    }
+
     /**
      * Build barangay-level population distribution, concentration metrics, and completeness audit.
      *
@@ -251,18 +260,16 @@ class GetPopulationStatisticsTool implements FunctionToolInterface
         }
 
         $psgCode = (string) ($municipality->psg_code ?? '');
-        $prefix = LocationResolver::psgcPrefixFor('municipality', $psgCode);
+        $codes = $this->barangayCodes($municipality);
 
         $popByPsgcAndYear = [];
-        if ($prefix !== '') {
+        if ($codes !== []) {
             $years = array_values(array_filter([$activeYear, $baselineYear]));
             if ($years !== []) {
-                $popRows = DB::table('population_figures')
-                    ->where('psg_code', 'like', $prefix.'%')
-                    ->whereIn('year', $years)
-                    ->whereNotNull('population')
-                    ->select(['psg_code', 'year', 'population'])
-                    ->get();
+                $popRows = $this->populationRows($codes, [PlaceDescription::LEVEL_BARANGAY])
+                    ->filter(fn ($row) => in_array((int) $row->year, $years, true)
+                        && ((int) $row->year !== $activeYear || (int) $row->release_id === PlaceDescription::latestReleaseId()))
+                    ->unique(fn ($row) => $row->psg_code.':'.$row->year);
 
                 foreach ($popRows as $pr) {
                     $popByPsgcAndYear[(string) $pr->psg_code][(int) $pr->year] = (int) $pr->population;
@@ -271,11 +278,11 @@ class GetPopulationStatisticsTool implements FunctionToolInterface
         }
 
         $urbanRuralByPsgc = [];
-        if ($prefix !== '' && Schema::hasTable('place_descriptions')) {
+        if ($codes !== [] && Schema::hasTable('place_descriptions')) {
             $urbanRuralByPsgc = PlaceDescription::query()
                 ->where('release_id', PlaceDescription::latestReleaseId())
                 ->where('level', PlaceDescription::LEVEL_BARANGAY)
-                ->where('psg_code', 'like', $prefix.'%')
+                ->whereIn('psg_code', $codes)
                 ->pluck('urban_rural', 'psg_code')
                 ->all();
         }

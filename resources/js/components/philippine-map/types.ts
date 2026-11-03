@@ -62,6 +62,16 @@ export interface GeographyApi {
     search: (query: string) => string;
 }
 
+export type MapRoutePrefix = 'admin.search-map' | 'user.intelligence-map';
+
+export function geographyApi(routePrefix: MapRoutePrefix): GeographyApi {
+    return {
+        geography: (level, parent) => route(`${routePrefix}.geography`, { level, ...(parent ? { parent } : {}) }),
+        selection: (level, id) => route(`${routePrefix}.selection`, { level, id }),
+        search: (q) => route(`${routePrefix}.search`, { q }),
+    };
+}
+
 export const ADMIN_GEOGRAPHY_API: GeographyApi = {
     geography: (level, parent) => route('admin.search-map.geography', { level, ...(parent ? { parent } : {}) }),
     selection: (level, id) => route('admin.search-map.selection', { level, id }),

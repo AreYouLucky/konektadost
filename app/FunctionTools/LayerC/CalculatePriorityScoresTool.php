@@ -11,6 +11,7 @@ use App\Models\Barangay;
 use App\Models\Facility;
 use App\Models\Municipality;
 use App\Models\TelecomSite;
+use App\Support\Assessment\AssessmentComputationCache;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -93,6 +94,14 @@ class CalculatePriorityScoresTool implements FunctionToolInterface
      */
     public function forLocation(Model $location, ?array $customWeights = null): array
     {
+        return app(AssessmentComputationCache::class)->remember(
+            self::class, $location, ['custom_weights' => $customWeights],
+            fn () => $this->computeForLocation($location, $customWeights)
+        );
+    }
+
+    private function computeForLocation(Model $location, ?array $customWeights): array
+    {
         if (! $location instanceof Municipality) {
             return [
                 'status' => 'not_applicable',
@@ -110,8 +119,8 @@ class CalculatePriorityScoresTool implements FunctionToolInterface
 
         $datasetsTool = app(GetAvailableDatasetsTool::class);
         $datasetAudit = $datasetsTool->forLocation($location);
-        $hasRoadData = ($datasetAudit['datasets']['roads']['status'] ?? 'empty') !== 'empty';
-        $hasTelecomData = ($datasetAudit['datasets']['telecom_sites']['status'] ?? 'empty') !== 'empty';
+        $hasRoadData = in_array($datasetAudit['datasets']['roads']['status'] ?? null, ['available', 'partial'], true);
+        $hasTelecomData = in_array($datasetAudit['datasets']['telecom_sites']['status'] ?? null, ['available', 'partial'], true);
 
         // 1. Establish and normalize active weights
         $rawWeights = array_merge(self::DEFAULT_WEIGHTS, $customWeights ?? []);
@@ -143,15 +152,7 @@ class CalculatePriorityScoresTool implements FunctionToolInterface
         $telecomByBarangayId = [];
         $telecomByPsgc = [];
         if ($hasTelecom) {
-            $telecomRows = TelecomSite::query()
-                ->select(['id', 'barangay_id', 'barangay_psgc'])
-                ->where(function ($q) use ($location, $prefix) {
-                    $q->where('municipality_id', $location->id);
-                    if ($prefix !== '') {
-                        $q->orWhere('barangay_psgc', 'like', $prefix.'%');
-                    }
-                })
-                ->get();
+            $telecomRows = $datasetsTool->telecomQueryFor($location)->get();
 
             foreach ($telecomRows as $site) {
                 if ($site->barangay_id !== null) {
@@ -264,8 +265,8 @@ class CalculatePriorityScoresTool implements FunctionToolInterface
         $denominatorPop = ($cityPopulation !== null && $cityPopulation > 0) ? $cityPopulation : $sumPop;
         $populatedRows = array_values(array_filter($rawRows, fn ($r) => ($r['population'] ?? 0) > 0));
         $avgBarangayPop = count($populatedRows) > 0 ? $sumPop / count($populatedRows) : 0;
-        $maxPop = max(1, ...array_map(fn ($r) => $r['population'] ?? 0, $rawRows));
-        $maxDensity = max(1.0, ...array_map(fn ($r) => $r['density'] ?? 0.0, $rawRows));
+        $maxPop = max([1, ...array_map(fn ($r) => $r['population'] ?? 0, $rawRows)]);
+        $maxDensity = max([1.0, ...array_map(fn ($r) => $r['density'] ?? 0.0, $rawRows)]);
 
         $rows = [];
         $highPriorityCount = 0;
@@ -468,4 +469,3 @@ class CalculatePriorityScoresTool implements FunctionToolInterface
         ];
     }
 }
-

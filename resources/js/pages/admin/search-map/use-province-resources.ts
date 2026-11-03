@@ -1,4 +1,5 @@
 import type { MapLocation, MapResourcePin } from '@/components/philippine-map';
+import type { MapRoutePrefix } from '@/components/philippine-map/types';
 import { useEffect, useMemo, useState } from 'react';
 import type { LocationScope } from './location-scope';
 
@@ -72,7 +73,11 @@ export interface MapAssessmentResult {
     basis_note: string | null;
 }
 
-export function useProvinceResources(provinceId: number | null, selection: MapLocation | null = null) {
+export function useProvinceResources(
+    provinceId: number | null,
+    selection: MapLocation | null = null,
+    routePrefix: MapRoutePrefix = 'admin.search-map',
+) {
     const level = selection?.level ?? 'province';
     const location = selection?.id ?? provinceId;
     const scopeKey = provinceId === null ? null : `${provinceId}:${level}:${location}`;
@@ -89,7 +94,7 @@ export function useProvinceResources(provinceId: number | null, selection: MapLo
         setState({ scopeKey, data: null, loading: true, error: null });
         async function load() {
             try {
-                const response = await fetch(route('admin.search-map.resources', { province: provinceId!, level, location: location! }), {
+                const response = await fetch(route(`${routePrefix}.resources`, { province: provinceId!, level, location: location! }), {
                     signal: controller.signal,
                     headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                 });
@@ -106,7 +111,7 @@ export function useProvinceResources(provinceId: number | null, selection: MapLo
         }
         void load();
         return () => controller.abort();
-    }, [provinceId, level, location, scopeKey, attempt]);
+    }, [provinceId, level, location, scopeKey, attempt, routePrefix]);
     const data = scopeKey !== null && state.scopeKey === scopeKey ? state.data : null;
     const pins = useMemo<MapResourcePin[]>(
         () => [

@@ -1,10 +1,11 @@
 import type { MapResourcePin } from '@/components/philippine-map';
+import type { MapRoutePrefix } from '@/components/philippine-map/types';
 import { useEffect, useState } from 'react';
 
 const EMPTY_PINS: MapResourcePin[] = [];
 
 /** Fetch the coordinate inventory once per mounted map; selections filter locally. */
-export function useMapMarkers() {
+export function useMapMarkers(routePrefix: MapRoutePrefix = 'admin.search-map') {
     const [attempt, setAttempt] = useState(0);
     const [state, setState] = useState<{ pins: MapResourcePin[]; loading: boolean; error: string | null }>({
         pins: EMPTY_PINS,
@@ -16,7 +17,7 @@ export function useMapMarkers() {
         setState({ pins: EMPTY_PINS, loading: true, error: null });
         void (async () => {
             try {
-                const response = await fetch(`${route('admin.search-map.index').replace(/\/$/, '')}/markers`, {
+                const response = await fetch(route(`${routePrefix}.markers`), {
                     signal: controller.signal,
                     headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                 });
@@ -31,6 +32,6 @@ export function useMapMarkers() {
             }
         })();
         return () => controller.abort();
-    }, [attempt]);
+    }, [attempt, routePrefix]);
     return { ...state, retry: () => setAttempt((value) => value + 1) };
 }

@@ -10,8 +10,8 @@ use App\FunctionTools\LayerB\AnalyzeHealthAccessTool;
 use App\FunctionTools\LayerB\AnalyzeRoadAccessibilityTool;
 use App\FunctionTools\LayerB\AnalyzeSafetyAndDrrmTool;
 use App\FunctionTools\Support\LocationResolver;
-use App\FunctionTools\Support\SpatialMetrics;
 use App\Models\Municipality;
+use App\Support\Assessment\AssessmentComputationCache;
 use App\Support\Assessment\IndicatorResult;
 use App\Support\Assessment\LocationAssessor;
 use Illuminate\Database\Eloquent\Model;
@@ -68,6 +68,11 @@ class DetectDevelopmentGapsTool implements FunctionToolInterface
      * @return array<string, mixed>
      */
     public function forLocation(Model $location): array
+    {
+        return app(AssessmentComputationCache::class)->remember(self::class, $location, [], fn () => $this->computeForLocation($location));
+    }
+
+    private function computeForLocation(Model $location): array
     {
         $assessor = app(LocationAssessor::class);
         $results = $assessor->assess($location);
@@ -203,4 +208,3 @@ class DetectDevelopmentGapsTool implements FunctionToolInterface
         ];
     }
 }
-

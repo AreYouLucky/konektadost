@@ -9,6 +9,7 @@ use App\Models\DostTech;
 use App\Models\Facility;
 use App\Models\Laboratory;
 use App\Models\Municipality;
+use Illuminate\Support\Facades\Schema;
 use App\Models\Technology;
 
 /**
@@ -195,9 +196,12 @@ class IdentifyImplementationPartnersTool implements FunctionToolInterface
 
     protected function findAcademicPartner(Municipality $municipality): ?array
     {
+        if (! Schema::hasTable('facilities')) {
+            return null;
+        }
         // 1. Check local education facility in municipality
         $higherEd = Facility::where('municipality_id', $municipality->id)
-            ->where('facility_type', 'education')
+            ->where('sector', 'education')
             ->where(function ($q) {
                 $q->where('name', 'like', '%University%')
                     ->orWhere('name', 'like', '%College%')
@@ -221,7 +225,8 @@ class IdentifyImplementationPartnersTool implements FunctionToolInterface
         }
 
         // 2. Check provincial level educational facility
-        $provincialHigherEd = Facility::where('facility_type', 'education')
+        $provincialHigherEd = Facility::where('sector', 'education')
+            ->whereIn('municipality_id', Municipality::query()->select('id')->where('province_id', $municipality->province_id))
             ->where(function ($q) {
                 $q->where('name', 'like', '%State University%')
                     ->orWhere('name', 'like', '%Polytechnic%');
@@ -248,6 +253,9 @@ class IdentifyImplementationPartnersTool implements FunctionToolInterface
 
     protected function findLaboratoryPartner(Municipality $municipality): ?array
     {
+        if (! Schema::hasTable('laboratories')) {
+            return null;
+        }
         $lab = Laboratory::where('municipality_id', $municipality->id)->first();
         if (!$lab && $municipality->province_id) {
             // Find in same province
@@ -256,13 +264,9 @@ class IdentifyImplementationPartnersTool implements FunctionToolInterface
             })->first();
         }
 
-        if (!$lab) {
-            $lab = Laboratory::first();
-        }
-
         if ($lab) {
             return [
-                'partner_name' => $lab->name,
+                'partner_name' => $lab->agency_name,
                 'partner_type' => 'DOST Accredited Testing / Calibration Laboratory (OneLab)',
                 'jurisdiction' => $lab->municipality_id === $municipality->id ? 'Municipal' : 'Regional',
                 'basis_of_engagement' => 'Accredited DOST laboratory equipped for testing and technical calibration services',
@@ -279,6 +283,9 @@ class IdentifyImplementationPartnersTool implements FunctionToolInterface
 
     protected function findVerifiedCoopPartner(Municipality $municipality, string $domain): ?array
     {
+        if (! Schema::hasTable('dost_projects')) {
+            return null;
+        }
         // Check for verified cooperating organizations in dost_projects
         $projWithCoop = DostProject::whereNotNull('cooperating')
             ->where('cooperating', '!=', '')
@@ -313,7 +320,7 @@ class IdentifyImplementationPartnersTool implements FunctionToolInterface
     protected function resolveIntervention(?string $id, ?string $sector): array
     {
         if ($id) {
-            $tech = Technology::where('code', $id)->orWhere('id', is_numeric($id) ? (int)$id : 0)->first();
+            $tech = Schema::hasTable('technologies') ? Technology::where('code', $id)->orWhere('id', is_numeric($id) ? (int)$id : 0)->first() : null;
             if ($tech) {
                 return [
                     'id' => $tech->code ?? ('TECH-' . $tech->id),
@@ -325,7 +332,7 @@ class IdentifyImplementationPartnersTool implements FunctionToolInterface
                 ];
             }
 
-            $dtech = DostTech::where('code', $id)->orWhere('id', is_numeric($id) ? (int)$id : 0)->first();
+            $dtech = Schema::hasTable('dost_techs') ? DostTech::where('code', $id)->orWhere('id', is_numeric($id) ? (int)$id : 0)->first() : null;
             if ($dtech) {
                 return [
                     'id' => $dtech->code ?? ('DTECH-' . $dtech->id),
@@ -337,7 +344,7 @@ class IdentifyImplementationPartnersTool implements FunctionToolInterface
                 ];
             }
 
-            if (str_starts_with($id, 'PROJ-')) {
+            if (str_starts_with($id, 'PROJ-') && Schema::hasTable('dost_projects')) {
                 $proj = DostProject::find((int)str_replace('PROJ-', '', $id));
                 if ($proj) {
                     return [

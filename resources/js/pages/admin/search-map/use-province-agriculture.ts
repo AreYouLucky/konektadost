@@ -1,4 +1,5 @@
 import type { MapLocation } from '@/components/philippine-map';
+import type { MapRoutePrefix } from '@/components/philippine-map/types';
 import { useEffect, useState } from 'react';
 import type { LocationScope } from './location-scope';
 
@@ -55,7 +56,11 @@ export async function fetchAgriculture<T>(url: string, signal: AbortSignal): Pro
     return response.json() as Promise<T>;
 }
 
-export function useProvinceAgriculture(provinceId: number | null, selection: MapLocation | null = null) {
+export function useProvinceAgriculture(
+    provinceId: number | null,
+    selection: MapLocation | null = null,
+    routePrefix: MapRoutePrefix = 'admin.search-map',
+) {
     const level = selection?.level ?? 'province';
     const location = selection?.id ?? provinceId;
     const scopeKey = provinceId === null ? null : `${provinceId}:${level}:${location}`;
@@ -71,7 +76,7 @@ export function useProvinceAgriculture(provinceId: number | null, selection: Map
         const controller = new AbortController();
         setState({ key: scopeKey, data: null, loading: true, error: null });
         void fetchAgriculture<AgricultureSummary>(
-            route('admin.search-map.agriculture', { province: provinceId, level, location: location! }),
+            route(`${routePrefix}.agriculture`, { province: provinceId, level, location: location! }),
             controller.signal,
         )
             .then((data) => {
@@ -87,7 +92,7 @@ export function useProvinceAgriculture(provinceId: number | null, selection: Map
                     });
             });
         return () => controller.abort();
-    }, [provinceId, level, location, scopeKey, attempt]);
+    }, [provinceId, level, location, scopeKey, attempt, routePrefix]);
     return {
         data: scopeKey !== null && state.key === scopeKey ? state.data : null,
         loading: scopeKey !== null && (state.key !== scopeKey || state.loading),

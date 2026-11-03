@@ -44,7 +44,7 @@ export default function DataBars({ title, description, rows, unit = '' }: { titl
                                             style={{
                                                 left: `${amount < 0 ? ((amount - min) / span) * 100 : zero}%`,
                                                 width: `${(Math.abs(amount) / span) * 100}%`,
-                                                backgroundColor: row.color ?? (amount < 0 ? '#d97706' : '#004a95'),
+                                                backgroundColor: row.color ?? (amount < 0 ? '#d97706' : '#087dcc'),
                                             }}
                                         />
                                     )}

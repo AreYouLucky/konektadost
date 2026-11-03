@@ -5,10 +5,9 @@ namespace App\Support\Map;
 use App\Models\Barangay;
 use App\Models\Municipality;
 use App\Models\Province;
-use App\Support\Assessment\AssessmentFunctionTools;
 use App\Support\Assessment\IndicatorCatalog;
+use App\Support\Assessment\MunicipalityAssessmentData;
 use App\Support\Assessment\MunicipalityProfileService;
-use App\Support\Assessment\PrioritizationService;
 use App\Support\Assessment\ProjectCatalog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -18,17 +17,37 @@ use Illuminate\Validation\Rule;
 /** Page props for the existing assessment screen, scoped through verified explorer geography. */
 class MapAssessmentReport
 {
-    public function props(Request $request): array
+    public function props(Request $request, bool $deferMunicipality = false): array
     {
         $data = $request->validate([
             'level' => ['required', Rule::in(['province', 'municipality', 'barangay'])],
             'location' => ['required', 'integer', 'min:1'],
             'focus' => ['sometimes', Rule::in(['general', ...IndicatorCatalog::supportedDimensions()])],
+            'map' => ['sometimes', Rule::in(['user', 'admin'])],
         ]);
+        $map = $data['map'] ?? ($request->user()?->isAdmin() ? 'admin' : 'user');
+        abort_unless($map === 'user' || $request->user()?->isAdmin(), 403);
         $geography = app(GeographyExplorer::class);
         $path = $geography->selection($data['level'], (int) $data['location'], false)['path'];
         $province = Province::query()->findOrFail($path[0]['id']);
         $scope = GeographicScope::fromRequest($request, $province, $geography);
+        if ($deferMunicipality && $scope->level === 'municipality') {
+            return [
+                'pendingAssessment' => [
+                    'url' => route('location.assess.data', [
+                        'level' => $scope->level, 'location' => $scope->id,
+                        'focus' => $data['focus'] ?? 'general', 'map' => $map,
+                    ]),
+                    'name' => $scope->name,
+                    'province' => $path[0]['name'],
+                    'layout' => $map,
+                    'backUrl' => route($map === 'admin' ? 'admin.search-map.index' : 'user.intelligence-map.index', [
+                        'level' => $scope->level, 'location' => $scope->id,
+                    ]),
+                ],
+            ];
+        }
+
         $resources = app(ProvinceResources::class)->summary($province, $geography, $scope);
         $focus = $data['focus'] ?? 'general';
         $results = array_values(array_filter($resources['assessment']['results'], fn ($row) => $focus === 'general' || $row['dimension'] === $focus));
@@ -41,14 +60,31 @@ class MapAssessmentReport
             'municipality' => Municipality::query()->find($scope->id),
             default => Barangay::query()->find($scope->id),
         };
+
+        $navigation = [
+            'assessmentParams' => ['level' => $scope->level, 'location' => $scope->id, 'map' => $map],
+            'assessmentLayout' => $map,
+            'mapReturnUrl' => route($map === 'admin' ? 'admin.search-map.index' : 'user.intelligence-map.index', [
+                'level' => $scope->level, 'location' => $scope->id,
+            ]),
+        ];
+
+        if ($locationModel instanceof Municipality) {
+            $assessment = app(MunicipalityAssessmentData::class)->props($locationModel, $focus);
+
+            return [
+                ...$assessment,
+                ...$navigation,
+                'location' => [...$assessment['location'], 'name' => $scope->name],
+                'resourceSummary' => $resources,
+                'agricultureSummary' => app(ProvinceAgriculture::class)->summary($scope->provinceId, $scope),
+                'localLaboratories' => $this->laboratories($resources),
+                'projectCatalog' => app(ProjectCatalog::class)->summary(),
+                'dostInterventions' => array_map(fn ($row) => [...$row, 'matches_city_cluster' => true, 'matches_focus' => $focus === 'general'], $resources['technologies']['records']),
+            ];
+        }
+
         $profile = $locationModel !== null ? app(MunicipalityProfileService::class)->getMunicipalityProfile($locationModel) : null;
-        $functionToolsBundle = $locationModel !== null ? app(AssessmentFunctionTools::class)->computeLocationBundle($locationModel) : null;
-        $barangayAssessment = $locationModel instanceof Municipality
-            ? app(PrioritizationService::class)->calculatePriorityScores($locationModel, $focus)
-            : null;
-        $layerEResult = $locationModel instanceof Municipality
-            ? app(\App\FunctionTools\FunctionToolRegistry::class)->executeLayerE($locationModel)
-            : null;
 
         return [
             'location' => [
@@ -65,13 +101,13 @@ class MapAssessmentReport
                 'population_statistics' => $profile['population_statistics'] ?? null,
             ],
             'municipalityProfile' => $profile,
-            'functionToolsBundle' => $functionToolsBundle,
-            'layerEResult' => $layerEResult,
-            'barangayAssessment' => $barangayAssessment,
+            'functionToolsBundle' => null,
+            'layerEResult' => null,
+            'barangayAssessment' => null,
+            'analysisScopeNotice' => 'This report shows the selected '.$scope->level.' only. Select a city or municipality for the full sector analysis, barangay priorities, and intervention feasibility assessment.',
             'populationYear' => $resources['population']['year'], 'populationReason' => $resources['population']['reason'],
             'focus' => $focus, 'dimensions' => IndicatorCatalog::dimensions(), 'results' => $results,
-            'assessmentParams' => ['level' => $scope->level, 'location' => $scope->id],
-            'mapReturnUrl' => route('admin.search-map.index', ['level' => $scope->level, 'location' => $scope->id]),
+            ...$navigation,
             'resourceSummary' => $resources,
             'agricultureSummary' => app(ProvinceAgriculture::class)->summary($scope->provinceId, $scope),
             'localLaboratories' => $this->laboratories($resources),

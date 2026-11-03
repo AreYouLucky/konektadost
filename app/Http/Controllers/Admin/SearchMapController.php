@@ -22,6 +22,11 @@ class SearchMapController extends Controller
         return $this->mapPage('admin/search-map/search-map', $geography);
     }
 
+    public function userMap(GeographyExplorer $geography): Response
+    {
+        return $this->mapPage('users/intellegence-map/intellegence-map', $geography);
+    }
+
     public function assessment(GeographyExplorer $geography): Response
     {
         return $this->mapPage('admin/assessment', $geography, [

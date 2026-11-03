@@ -4,6 +4,8 @@ For a standalone website description to share with ChatGPT, see [Website Descrip
 
 For the MapLibre geographic explorer at `/admin/search-map`, see [Map Explorer](docs/MAP_EXPLORER.md), including terrain, optional licensed imagery, and geographic API setup.
 
+For the current function tools, assessment formulas, and worked examples such as cell sites per population, see [Function Tools and Assessment Calculations](FUNCTION_TOOLS_README.md).
+
 **AI-powered geospatial decision-support system for DOST.**
 
 KonektaDOST helps DOST decision-makers identify community needs, assess development

@@ -19,13 +19,13 @@ export function SummarySection({
             <div className="flex items-start gap-2.5">
                 {Icon && (
                     <span
-                        className={`grid size-9 shrink-0 place-items-center rounded-xl ${tone === 'blue' ? 'bg-blue-100 text-blue-700' : 'bg-[#eaf3ed] text-[#138771]'}`}
+                        className={`grid size-9 shrink-0 place-items-center rounded-xl ${tone === 'blue' ? 'bg-blue-100 text-[#087dcc]' : 'bg-[#eaf3ed] text-[#138771]'}`}
                     >
                         <Icon size={19} aria-hidden="true" />
                     </span>
                 )}
                 <div className="min-w-0">
-                    <h3 className={`text-sm font-semibold ${tone === 'blue' ? 'text-blue-950' : 'text-[#153d38]'}`}>{title}</h3>
+                    <h3 className={`text-sm font-semibold ${tone === 'blue' ? 'text-[#087dcc]' : 'text-[#153d38]'}`}>{title}</h3>
                     {description && <p className="mt-1 text-[11px] leading-relaxed text-[#738580]">{description}</p>}
                 </div>
             </div>

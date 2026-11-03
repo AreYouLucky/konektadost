@@ -21,6 +21,20 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('location', [LocationController::class, 'show'])->name('location.show');
     Route::get('location/assess', [LocationController::class, 'assess'])->name('location.assess');
+    Route::get('location/assess/data', [LocationController::class, 'assessmentData'])->middleware('throttle:30,1')->name('location.assess.data');
+    Route::post('location/assess/ai', [LocationController::class, 'assessmentAi'])->middleware('throttle:6,1')->name('location.assess.ai');
+
+    Route::prefix('intelligence-map')->name('user.intelligence-map.')->group(function () {
+        Route::get('/', [SearchMapController::class, 'userMap'])->name('index');
+        Route::middleware('throttle:180,1')->group(function () {
+            Route::get('markers', MapMarkersController::class)->name('markers');
+            Route::get('provinces/{province}/agriculture', ProvinceAgricultureController::class)->whereNumber('province')->name('agriculture');
+            Route::get('provinces/{province}/resources', ProvinceResourcesController::class)->whereNumber('province')->name('resources');
+            Route::get('geography', [SearchMapController::class, 'geography'])->name('geography');
+            Route::get('search', [SearchMapController::class, 'search'])->name('search');
+            Route::get('locations/{level}/{id}', [SearchMapController::class, 'selection'])->whereNumber('id')->name('selection');
+        });
+    });
 });
 
 // Admin area. EnsureUserHasRole bounces anyone without an accepted role to

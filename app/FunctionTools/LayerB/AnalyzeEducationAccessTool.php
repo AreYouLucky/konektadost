@@ -75,12 +75,13 @@ class AnalyzeEducationAccessTool implements FunctionToolInterface
         $baseQuery = $datasetsTool->facilityQueryFor($location)->where('sector', 'education');
 
         $totalSchools = (clone $baseQuery)->count();
-        $elementary = (clone $baseQuery)->where('level', 'elementary')->count();
-        $secondary = (clone $baseQuery)->whereIn('level', ['secondary', 'high_school', 'senior_high'])->count();
-        $tertiary = (clone $baseQuery)->whereIn('level', ['tertiary', 'college', 'university'])->count();
-        $unclassified = (clone $baseQuery)->where(function ($q) {
+        $hasLevel = Schema::hasColumn('facilities', 'level');
+        $elementary = $hasLevel ? (clone $baseQuery)->where('level', 'elementary')->count() : null;
+        $secondary = $hasLevel ? (clone $baseQuery)->whereIn('level', ['secondary', 'high_school', 'senior_high'])->count() : null;
+        $tertiary = $hasLevel ? (clone $baseQuery)->whereIn('level', ['tertiary', 'college', 'university'])->count() : null;
+        $unclassified = $hasLevel ? (clone $baseQuery)->where(function ($q) {
             $q->whereNull('level')->orWhere('level', '')->orWhere('level', 'unknown');
-        })->count();
+        })->count() : $totalSchools;
 
         $brgyCoverage = $location instanceof Municipality
             ? SpatialMetrics::barangayCoverageForSector($location, 'education', $population)
@@ -111,13 +112,13 @@ class AnalyzeEducationAccessTool implements FunctionToolInterface
             ],
             'rates_per_10k' => [
                 'schools_per_10k' => SpatialMetrics::ratePer($totalSchools, $population, 10_000),
-                'elementary_schools_per_10k' => SpatialMetrics::ratePer($elementary, $population, 10_000),
-                'secondary_schools_per_10k' => SpatialMetrics::ratePer($secondary, $population, 10_000),
+                'elementary_schools_per_10k' => $elementary === null ? null : SpatialMetrics::ratePer($elementary, $population, 10_000),
+                'secondary_schools_per_10k' => $secondary === null ? null : SpatialMetrics::ratePer($secondary, $population, 10_000),
             ],
             'rates_per_100k' => [
                 'schools_per_100k' => SpatialMetrics::ratePer($totalSchools, $population, 100_000),
-                'elementary_schools_per_100k' => SpatialMetrics::ratePer($elementary, $population, 100_000),
-                'secondary_schools_per_100k' => SpatialMetrics::ratePer($secondary, $population, 100_000),
+                'elementary_schools_per_100k' => $elementary === null ? null : SpatialMetrics::ratePer($elementary, $population, 100_000),
+                'secondary_schools_per_100k' => $secondary === null ? null : SpatialMetrics::ratePer($secondary, $population, 100_000),
             ],
             'barangay_coverage' => $brgyCoverage,
             'nearest_school_if_zero' => $nearestSchool,

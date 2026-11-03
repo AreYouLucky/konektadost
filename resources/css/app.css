@@ -160,38 +160,43 @@
     --sidebar-ring: hsl(217.2, 91.2%, 59.8%);
 }
 
-/* Kept on the sidebar itself so the blue admin theme also reaches the mobile sheet portal. */
-.admin-sidebar {
-    --sidebar-background: #123575;
-    --sidebar-foreground: #e2efff;
-    --sidebar-primary: #bfdbfe;
-    --sidebar-primary-foreground: #172e5f;
-    --sidebar-accent: rgb(255 255 255 / 10%);
-    --sidebar-accent-foreground: #eff6ff;
-    --sidebar-border: rgb(255 255 255 / 12%);
-    --sidebar-ring: #bfdbfe;
+/* Keep workspace colors on each sidebar so they also reach the mobile sheet portal. */
+.admin-sidebar,
+.user-sidebar {
+    --sidebar-background: #fff;
+    --sidebar-foreground: #334155;
+    --sidebar-primary: #087dcc;
+    --sidebar-primary-foreground: #fff;
+    --sidebar-accent: #eff6ff;
+    --sidebar-accent-foreground: #087dcc;
+    --sidebar-border: #e2e8f0;
+    --sidebar-ring: #087dcc;
 }
 
 .admin-sidebar[data-sidebar='sidebar'],
-.admin-sidebar [data-sidebar='sidebar'] {
-    border: 1px solid rgb(255 255 255 / 10%);
+.admin-sidebar [data-sidebar='sidebar'],
+.user-sidebar[data-sidebar='sidebar'],
+.user-sidebar [data-sidebar='sidebar'] {
+    border: 1px solid var(--sidebar-border);
     border-radius: 1rem;
-    background: #123575;
-    box-shadow: 0 8px 32px rgb(11 36 84 / 14%);
+    background: var(--sidebar-background);
+    box-shadow: 0 8px 32px rgb(8 125 204 / 6%);
 }
 
-.admin-sidebar[data-mobile='true'] {
+.admin-sidebar[data-mobile='true'],
+.user-sidebar[data-mobile='true'] {
     border-radius: 0 1rem 1rem 0;
 }
 
-/* Blue actions are local to the admin layout and assessment report. */
+/* Blue actions are local to workspace layouts and the assessment report. */
 .admin-content,
+.user-content,
 .location-assessment {
-    --primary: #123575;
+    --primary: #087dcc;
     --primary-foreground: #fff;
     --accent: #eff6ff;
-    --accent-foreground: #123575;
-    --ring: #123575;
+    --accent-foreground: #087dcc;
+    --ring: #087dcc;
     --color-primary: var(--primary);
     --color-primary-foreground: var(--primary-foreground);
     --color-accent: var(--accent);

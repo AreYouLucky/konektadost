@@ -2,9 +2,25 @@
 
 namespace Tests\Feature;
 
+use App\FunctionTools\FunctionToolRegistry;
+use App\FunctionTools\LayerA\GetGeographicDataAvailabilityTool;
+use App\FunctionTools\LayerE\MatchDostInterventionsTool;
+use App\FunctionTools\LayerF\GenerateActionPlanTool;
 use App\Models\CollectionYear;
+use App\Models\Municipality;
+use App\Models\Province;
 use App\Models\User;
+use App\Support\Assessment\AssessmentFunctionTools;
+use App\Support\Assessment\DatasetAndAssetService;
+use App\Support\Assessment\DostCatalogToolService;
+use App\Support\Assessment\LocationAssessor;
+use App\Support\Assessment\MunicipalityAssessmentData;
+use App\Support\Assessment\MunicipalityProfileService;
+use App\Support\Assessment\PrioritizationService;
 use App\Support\Assessment\ProjectCatalog;
+use App\Support\Assessment\SectorAnalysisService;
+use App\Support\Geometry\PolygonArea;
+use App\Support\Map\ProvinceResources;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -91,6 +107,47 @@ class MapExplorerTest extends TestCase
             ->where('satellite', null)->where('geographyError', null)
             ->has('dimensions', 10)->where('dimensions.0.key', 'population_and_social_needs')
             ->missing('provinces.0.geometry'));
+    }
+
+    public function test_user_intelligence_map_requires_authentication(): void
+    {
+        foreach ([
+            '/intelligence-map',
+            '/intelligence-map/markers',
+            '/intelligence-map/geography?level=province',
+            '/intelligence-map/search?q=City',
+            '/intelligence-map/locations/barangay/101',
+            '/intelligence-map/provinces/1/resources',
+            '/intelligence-map/provinces/1/agriculture',
+        ] as $url) {
+            $this->get($url)->assertRedirect(route('login'));
+        }
+    }
+
+    public function test_regular_users_can_load_the_intelligence_map_and_its_data(): void
+    {
+        $this->actingAs(new User(['id' => 2, 'role' => 'user']));
+        $this->get('/intelligence-map')->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->component('users/intellegence-map/intellegence-map')->has('provinces', 2)
+            ->where('geographyError', null)->where('satellite', null)->missing('provinces.0.geometry'));
+        $this->getJson('/intelligence-map/geography?level=municipality&parent=1')->assertOk()
+            ->assertJsonCount(1, 'locations')->assertJsonPath('locations.0.id', 11);
+        $this->getJson('/intelligence-map/search?q=Quezon%20City')->assertOk()->assertJsonPath('results.0.id', 11);
+        $this->getJson('/intelligence-map/locations/barangay/101')->assertOk()->assertJsonPath('path.2.id', 101);
+        $this->getJson('/intelligence-map/markers')->assertOk()->assertJsonStructure(['pins', 'datasets']);
+        $this->getJson('/intelligence-map/provinces/1/resources?level=municipality&location=11')->assertOk()
+            ->assertJsonPath('scope.level', 'municipality')->assertJsonPath('scope.id', 11);
+        $this->getJson('/intelligence-map/provinces/1/agriculture?level=barangay&location=101')->assertOk()
+            ->assertJsonPath('scope.level', 'barangay')->assertJsonPath('scope.id', 101);
+    }
+
+    public function test_user_map_rejects_selections_outside_the_verified_province(): void
+    {
+        $this->actingAs(new User(['id' => 2, 'role' => 'user']));
+        foreach (['resources', 'agriculture'] as $endpoint) {
+            $this->getJson('/intelligence-map/provinces/1/'.$endpoint.'?level=municipality&location=12')->assertNotFound();
+        }
+        $this->getJson('/intelligence-map/locations/barangay/102')->assertUnprocessable();
     }
 
     public function test_assessment_uses_the_selected_municipality_psgc_without_losing_leading_zeroes(): void
@@ -671,10 +728,10 @@ class MapExplorerTest extends TestCase
         $barangay = collect($this->getJson($url.'?level=barangay&location=101')->assertOk()->json('assessment.results'))->keyBy('key');
         $this->assertEquals(100, $barangay['laboratory_tests_per_million']['value']);
         $this->assertEquals(20, $barangay['telecom_sites_per_100k']['value']);
-        $this->get('/location/assess?level=municipality&location=11')->assertOk()
-            ->assertInertia(fn (Assert $page) => $page->has('localLaboratories', 2)
-                ->where('localLaboratories.0.total_services', 1)->has('localLaboratories.0.services', 1)
-                ->where('localLaboratories.1.total_services', 2)->has('localLaboratories.1.services', 2));
+        $this->getJson('/location/assess/data?level=municipality&location=11')->assertOk()
+            ->assertJsonCount(2, 'localLaboratories')
+            ->assertJsonPath('localLaboratories.0.total_services', 1)->assertJsonCount(1, 'localLaboratories.0.services')
+            ->assertJsonPath('localLaboratories.1.total_services', 2)->assertJsonCount(2, 'localLaboratories.1.services');
         DB::table('telecom_sites')->where('id', 2)->update(['technologies' => null]);
         $unknown = collect($this->getJson($url)->assertOk()->json('assessment.results'))->keyBy('key');
         $this->assertSame('no_data', $unknown['telecom_5g_share']['status']);
@@ -686,6 +743,16 @@ class MapExplorerTest extends TestCase
         $this->seedAssessmentPopulation();
         foreach ([['province', 1, 'Metropolitan Manila', 1000000], ['municipality', 11, 'Quezon City', 100000],
             ['barangay', 101, 'Sample Barangay', 10000]] as [$level, $id, $name, $population]) {
+            if ($level === 'municipality') {
+                $this->admin()->get(route('location.assess', ['level' => $level, 'location' => $id]))
+                    ->assertOk()->assertInertia(fn (Assert $page) => $page->component('location-assessment')
+                    ->where('pendingAssessment.name', $name)->missing('results'));
+                $this->getJson(route('location.assess.data', ['level' => $level, 'location' => $id]))
+                    ->assertOk()->assertJsonPath('location.name', $name)->assertJsonPath('location.population', $population)
+                    ->assertJsonPath('resourceSummary.scope.key', $level.':'.$id)->assertJsonCount(11, 'results');
+
+                continue;
+            }
             $this->admin()->get(route('location.assess', ['level' => $level, 'location' => $id, 'focus' => 'general']))
                 ->assertOk()->assertInertia(fn (Assert $page) => $page->component('location-assessment')
                 ->where('location.name', $name)->where('location.population', $population)->where('populationYear', 2024)
@@ -694,22 +761,179 @@ class MapExplorerTest extends TestCase
                 ->where('mapReturnUrl', route('admin.search-map.index', ['level' => $level, 'location' => $id]))
                 ->where('agricultureSummary.status', 'unavailable'));
         }
-        $this->get('/location/assess?level=municipality&location=11&focus=health_and_public_health')->assertOk()
-            ->assertInertia(fn (Assert $page) => $page->has('results', 3)->where('assessmentParams.location', 11)
-                ->where('results.0.dimension', 'health_and_public_health'));
+        $this->getJson('/location/assess/data?level=municipality&location=11&focus=health_and_public_health')->assertOk()
+            ->assertJsonCount(3, 'results')->assertJsonPath('assessmentParams.location', 11)
+            ->assertJsonPath('results.0.dimension', 'health_and_public_health');
         Schema::table('municipalities', fn (Blueprint $table) => $table->dropColumn('psg_code'));
-        $this->get('/location/assess?level=municipality&location=11')->assertOk()
-            ->assertInertia(fn (Assert $page) => $page->where('location.psg_code', null)->where('location.population', null)
-                ->where('resourceSummary.population.status', 'unavailable'));
+        $this->getJson('/location/assess/data?level=municipality&location=11')->assertOk()
+            ->assertJsonPath('location.psg_code', null)->assertJsonPath('location.population', null)
+            ->assertJsonPath('resourceSummary.population.status', 'unavailable');
     }
 
-    public function test_selected_assessment_scope_is_admin_only_and_requires_valid_geography(): void
+    public function test_map_and_service_area_share_the_current_municipality_analysis(): void
+    {
+        $this->seedAssessmentPopulation();
+        $profile = [
+            'area_km2' => 42.5,
+            'income_class' => '2nd',
+            'city_class' => 'Component city',
+            'urban_rural' => 'Urban',
+            'barangay_counts' => ['total_barangays' => 1],
+            'population_statistics' => ['population_current' => 100000, 'population_baseline' => 90000, 'growth_rate_pct' => 11.11],
+        ];
+        $bundle = [
+            'dataset_audit' => ['datasets' => []],
+            'local_assets' => ['location_id' => 11],
+            'telecom_infrastructure' => ['total_sites' => 3],
+            'geographic_data_availability' => ['location_boundary' => ['has_geometry' => true]],
+            'sector_analysis' => ['road_accessibility' => ['status' => 'unavailable']],
+            'detected_gaps' => ['gaps' => []],
+            'local_dost_projects' => ['projects' => []],
+            'dost_technologies' => ['results' => []],
+            'action_plan' => null,
+        ];
+        $layerE = [
+            'matched_interventions' => ['gap_interventions' => []],
+            'suitability_assessment' => ['status' => 'available'],
+            'feasibility_assessment' => ['status' => 'available'],
+            'implementation_partners' => ['partners' => []],
+            'requirements_estimate' => ['status' => 'available'],
+        ];
+        $isSelectedMunicipality = \Mockery::on(fn ($location) => $location instanceof Municipality && $location->id === 11);
+        $this->mock(MunicipalityProfileService::class, fn ($mock) => $mock
+            ->shouldReceive('getMunicipalityProfile')->twice()->with($isSelectedMunicipality)->andReturn($profile));
+        $this->mock(AssessmentFunctionTools::class, fn ($mock) => $mock
+            ->shouldReceive('computeLocationBundle')->twice()->with($isSelectedMunicipality, false)->andReturn($bundle));
+        $this->mock(FunctionToolRegistry::class, fn ($mock) => $mock
+            ->shouldReceive('executeLayerE')->twice()->with($isSelectedMunicipality)->andReturn($layerE));
+        $this->mock(LocationAssessor::class, fn ($mock) => $mock
+            ->shouldReceive('assess')->twice()->with($isSelectedMunicipality, 'general')->andReturn([])
+            ->shouldReceive('assessSnapshot')->andReturn([]));
+        $this->mock(PrioritizationService::class, fn ($mock) => $mock
+            ->shouldReceive('calculatePriorityScores')->twice()->with($isSelectedMunicipality, 'general')
+            ->andReturn(['summary' => ['high_priority_count' => 1], 'barangays' => [['id' => 101]]]));
+
+        $this->actingAs(new User(['id' => 2, 'role' => 'user']));
+        foreach (['/location/assess/data?city=1300001000', '/location/assess/data?level=municipality&location=11&map=user'] as $url) {
+            $response = $this->getJson($url)->assertOk()
+                ->assertJsonPath('municipalityProfile', $profile)->assertJsonPath('functionToolsBundle', $bundle)->assertJsonPath('layerEResult', $layerE)
+                ->assertJsonPath('location.psg_code', '1300001000')->assertJsonPath('location.population', 100000)->assertJsonPath('location.area_km2', 42.5)
+                ->assertJsonPath('location.income_class', '2nd')->assertJsonPath('populationYear', 2024)->assertJsonPath('populationReason', null)
+                ->assertJsonPath('barangayAssessment.summary.high_priority_count', 1);
+            $this->assertStringContainsString('no-store', $response->headers->get('Cache-Control'));
+            $this->assertStringContainsString('private', $response->headers->get('Cache-Control'));
+        }
+    }
+
+    public function test_city_pages_return_before_any_expensive_assessment_or_resource_computation(): void
+    {
+        $this->seedAssessmentPopulation();
+        $this->partialMock(MunicipalityAssessmentData::class, fn ($mock) => $mock->shouldNotReceive('props'));
+        $this->mock(ProvinceResources::class, fn ($mock) => $mock->shouldNotReceive('summary'));
+        $this->actingAs(new User(['id' => 2, 'role' => 'user']));
+
+        $this->get('/location/assess?city=1300001000')->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->component('location-assessment')->where('pendingAssessment.name', 'QuezonCity')
+            ->where('pendingAssessment.layout', 'user')
+            ->where('pendingAssessment.url', route('location.assess.data', ['city' => '1300001000', 'focus' => 'general']))
+            ->missing('results')->missing('functionToolsBundle'));
+        foreach (['user', 'admin'] as $map) {
+            if ($map === 'admin') {
+                $this->admin();
+            }
+            $this->get('/location/assess?level=municipality&location=11&map='.$map)->assertOk()->assertInertia(fn (Assert $page) => $page
+                ->component('location-assessment')->where('pendingAssessment.name', 'Quezon City')
+                ->where('pendingAssessment.layout', $map)
+                ->where('pendingAssessment.url', route('location.assess.data', ['level' => 'municipality', 'location' => 11, 'focus' => 'general', 'map' => $map]))
+                ->where('pendingAssessment.backUrl', route($map === 'admin' ? 'admin.search-map.index' : 'user.intelligence-map.index', ['level' => 'municipality', 'location' => 11]))
+                ->missing('results')->missing('functionToolsBundle'));
+        }
+    }
+
+    public function test_async_assessment_data_requires_authentication_and_revalidates_the_selection(): void
+    {
+        $this->getJson('/location/assess/data?level=municipality&location=11&map=user')->assertUnauthorized();
+        $this->actingAs(new User(['id' => 2, 'role' => 'user']));
+        $this->getJson('/location/assess/data?level=municipality&location=11&map=admin')->assertForbidden();
+        $this->getJson('/location/assess/data?level=municipality&location=999&map=user')->assertNotFound();
+        $this->getJson('/location/assess/data?level=municipality&location=11&map=user&focus=invented')->assertUnprocessable();
+        $this->getJson('/location/assess/data?level=country&location=11&map=user')->assertUnprocessable();
+        $this->getJson('/location/assess/data?city=unknown')->assertNotFound();
+    }
+
+    public function test_interactive_bundle_skips_action_plan_but_explicit_full_bundle_preserves_it(): void
+    {
+        $datasets = $this->mock(DatasetAndAssetService::class);
+        foreach (['getAvailableDatasets', 'getLocalAssets', 'getTelecomInfrastructure', 'getGeographicDataAvailability'] as $method) {
+            $datasets->shouldReceive($method)->twice()->andReturn([]);
+        }
+        $sectors = $this->mock(SectorAnalysisService::class);
+        foreach (['analyzeHealthAccess', 'analyzeEducationAccess', 'analyzeDigitalConnectivity', 'analyzeRoadAccessibility', 'analyzeAgriculture', 'analyzeStiLaboratoryCapacity', 'analyzeSafetyAndDrrm'] as $method) {
+            $sectors->shouldReceive($method)->twice()->andReturn([]);
+        }
+        $priorities = $this->mock(PrioritizationService::class);
+        foreach (['detectDevelopmentGaps', 'identifyUnderservedAreas', 'calculatePriorityScores'] as $method) {
+            $priorities->shouldReceive($method)->twice()->andReturn([]);
+        }
+        $catalog = $this->mock(DostCatalogToolService::class);
+        $catalog->shouldReceive('getLocalDostProjects', 'searchDostTechnologies')->twice()->andReturn([]);
+        $this->mock(MatchDostInterventionsTool::class, fn ($mock) => $mock->shouldReceive('execute')->twice()->andReturn([]));
+        $this->mock(GenerateActionPlanTool::class, fn ($mock) => $mock->shouldReceive('execute')->once()->andReturn(['status' => 'proposal']));
+
+        $tools = app(AssessmentFunctionTools::class);
+        $municipality = Municipality::query()->findOrFail(11);
+        $this->assertNull($tools->computeLocationBundle($municipality, includeActionPlan: false)['action_plan']);
+        $this->assertSame(['status' => 'proposal'], $tools->computeLocationBundle($municipality)['action_plan']);
+    }
+
+    public function test_user_map_assessment_preserves_its_scope_layout_and_return_path(): void
+    {
+        $this->seedAssessmentPopulation();
+        $this->actingAs(new User(['id' => 2, 'role' => 'user']));
+        foreach ([['province', 1, 1000000], ['barangay', 101, 10000]] as [$level, $id, $population]) {
+            $this->get('/location/assess?level='.$level.'&location='.$id.'&map=user')->assertOk()
+                ->assertInertia(fn (Assert $page) => $page
+                    ->component('location-assessment')->where('assessmentLayout', 'user')
+                    ->where('assessmentParams.map', 'user')->where('resourceSummary.scope.key', $level.':'.$id)
+                    ->where('location.population', $population)->where('layerEResult', null)
+                    ->where('mapReturnUrl', route('user.intelligence-map.index', ['level' => $level, 'location' => $id])));
+        }
+        $this->admin()->get('/location/assess?level=province&location=1&map=user')->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->where('assessmentLayout', 'user')
+                ->where('mapReturnUrl', route('user.intelligence-map.index', ['level' => 'province', 'location' => 1])));
+        $this->get('/location/assess?level=province&location=1&map=admin')->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->where('assessmentLayout', 'admin')
+                ->where('mapReturnUrl', route('admin.search-map.index', ['level' => 'province', 'location' => 1])));
+    }
+
+    public function test_profile_and_geometry_tools_use_the_existing_polygon_area_calculation(): void
+    {
+        $province = Province::query()->findOrFail(1);
+        $expected = round(PolygonArea::ofGeometry($province->geometry), 4);
+        $profile = app(MunicipalityProfileService::class)->getMunicipalityProfile($province);
+        $geography = app(GetGeographicDataAvailabilityTool::class)->forLocation($province);
+
+        $this->assertGreaterThan(0, $expected);
+        $this->assertSame($expected, $profile['area_km2']);
+        $this->assertSame($expected, $geography['location_boundary']['computed_geometry_area_km2']);
+    }
+
+    public function test_service_area_assessment_rejects_an_unsupported_focus(): void
+    {
+        $this->seedAssessmentPopulation();
+        $this->actingAs(new User(['id' => 2, 'role' => 'user']));
+        $this->getJson('/location/assess?city=1300001000&focus=invented')->assertUnprocessable()
+            ->assertJsonValidationErrors('focus');
+    }
+
+    public function test_selected_assessment_scope_requires_authentication_and_valid_geography(): void
     {
         $url = '/location/assess?level=province&location=1';
         $this->get($url)->assertRedirect(route('login'));
         foreach (['user', 'technician'] as $role) {
-            $this->actingAs(new User(['id' => 5, 'role' => $role]))->get($url)->assertForbidden();
+            $this->actingAs(new User(['id' => 5, 'role' => $role]))->get($url.'&map=admin')->assertForbidden();
         }
+        $this->getJson($url.'&map=invented')->assertUnprocessable();
         $this->admin()->getJson('/location/assess?level=country&location=1')->assertUnprocessable();
         $this->getJson('/location/assess?level=municipality')->assertUnprocessable();
         $this->getJson('/location/assess?level=province&location=999')->assertNotFound();
@@ -893,17 +1117,17 @@ class MapExplorerTest extends TestCase
         });
         DB::table('barangays')->where('id', 101)->update(['municipality_id' => 11, 'brgy_name' => 'Sample Barangay']);
         DB::table('population_figures')->where('psg_code', '1300001000')->update(['population' => null]);
-        $this->admin()->get('/location/assess?city=1300001000')->assertOk()->assertInertia(fn (Assert $page) => $page
-            ->where('location.population', null)->where('barangayAssessment.summary.total_population', 10000)
-            ->where('populationYear', 2024)->has('populationReason')->where('results.0.status', 'no_data')
-            ->where('projectCatalog.status', 'unavailable'));
+        $this->admin()->getJson('/location/assess/data?city=1300001000')->assertOk()
+            ->assertJsonPath('location.population', null)->assertJsonPath('barangayAssessment.summary.total_population', 10000)
+            ->assertJsonPath('populationYear', 2024)->assertJsonStructure(['populationReason'])->assertJsonPath('results.0.status', 'no_data')
+            ->assertJsonPath('projectCatalog.status', 'unavailable');
     }
 
     public function test_assessment_project_catalog_is_separate_from_local_deployment_matches(): void
     {
-        $url = '/location/assess?level=municipality&location=11';
-        $this->admin()->get($url)->assertOk()->assertInertia(fn (Assert $page) => $page
-            ->where('projectCatalog.status', 'unavailable')->has('projectCatalog.records', 0));
+        $url = '/location/assess/data?level=municipality&location=11';
+        $this->admin()->getJson($url)->assertOk()
+            ->assertJsonPath('projectCatalog.status', 'unavailable')->assertJsonCount(0, 'projectCatalog.records');
         Schema::create('dost_techs', function (Blueprint $table) {
             $table->id();
             foreach (['code', 'name', 'agency', 'sector', 'mechanism', 'status', 'outcome', 'deployment_clusters'] as $column) {
@@ -913,13 +1137,13 @@ class MapExplorerTest extends TestCase
         DB::table('dost_techs')->insert(['id' => 9, 'code' => 'TEST-HEALTH', 'name' => 'Fixture diagnostic equipment',
             'agency' => 'Fixture agency', 'sector' => 'Health', 'mechanism' => 'Fixture health mechanism',
             'deployment_clusters' => 'OtherCity', 'status' => 'Source status', 'outcome' => null]);
-        $this->get($url)->assertOk()->assertInertia(fn (Assert $page) => $page
-            ->where('projectCatalog.status', 'available')->has('projectCatalog.records', 1)
-            ->where('projectCatalog.records.0.code', 'TEST-HEALTH')->where('projectCatalog.records.0.agency', 'Fixture agency')
-            ->where('projectCatalog.records.0.outcome', null)->where('projectCatalog.records.0.status', 'Source status')
-            ->where('projectCatalog.coverage', 'NCR reference catalog. Applicability, eligibility, availability and local deployment must be confirmed with DOST.')
-            ->missing('projectCatalog.records.0.matches_city_cluster')->has('dostInterventions', 0)
-            ->has('results', 11)->where('resourceSummary.scope.key', 'municipality:11'));
+        $this->getJson($url)->assertOk()
+            ->assertJsonPath('projectCatalog.status', 'available')->assertJsonCount(1, 'projectCatalog.records')
+            ->assertJsonPath('projectCatalog.records.0.code', 'TEST-HEALTH')->assertJsonPath('projectCatalog.records.0.agency', 'Fixture agency')
+            ->assertJsonPath('projectCatalog.records.0.outcome', null)->assertJsonPath('projectCatalog.records.0.status', 'Source status')
+            ->assertJsonPath('projectCatalog.coverage', 'NCR reference catalog. Applicability, eligibility, availability and local deployment must be confirmed with DOST.')
+            ->assertJsonMissingPath('projectCatalog.records.0.matches_city_cluster')->assertJsonCount(0, 'dostInterventions')
+            ->assertJsonCount(11, 'results')->assertJsonPath('resourceSummary.scope.key', 'municipality:11');
     }
 
     public function test_project_catalog_keeps_missing_optional_details_null(): void

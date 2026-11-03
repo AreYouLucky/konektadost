@@ -30,12 +30,16 @@ class LocationResolver
         }
 
         $level = strtolower(trim((string) ($args['level'] ?? 'municipality')));
+        if (! in_array($level, ['municipality', 'province', 'barangay'], true)) {
+            throw new InvalidArgumentException('Unsupported geographic level.');
+        }
 
         if (! empty($args['municipality_id'])) {
             $mun = Municipality::query()->find((int) $args['municipality_id']);
             if ($mun !== null) {
                 return $mun;
             }
+            throw new InvalidArgumentException('The selected municipality was not found.');
         }
 
         if (! empty($args['province_id'])) {
@@ -43,6 +47,7 @@ class LocationResolver
             if ($prov !== null) {
                 return $prov;
             }
+            throw new InvalidArgumentException('The selected province was not found.');
         }
 
         if (! empty($args['barangay_id'])) {
@@ -50,10 +55,19 @@ class LocationResolver
             if ($bgy !== null) {
                 return $bgy;
             }
+            throw new InvalidArgumentException('The selected barangay was not found.');
         }
 
         if (! empty($args['psg_code'])) {
             $code = trim((string) $args['psg_code']);
+            if (array_key_exists('level', $args)) {
+                $class = match ($level) {
+                    'province' => Province::class, 'barangay' => Barangay::class, default => Municipality::class,
+                };
+
+                return $class::query()->where('psg_code', $code)->first()
+                    ?? throw new InvalidArgumentException('No location matches the selected PSGC and geographic level.');
+            }
 
             if ($level === 'barangay') {
                 $bgy = Barangay::query()->where('psg_code', $code)->first();

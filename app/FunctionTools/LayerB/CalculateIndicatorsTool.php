@@ -11,6 +11,7 @@ use App\FunctionTools\Support\SpatialMetrics;
 use App\Support\Assessment\IndicatorResult;
 use App\Support\Assessment\LocationAssessor;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Layer B (B1) Function Tool: calculate_indicators
@@ -103,11 +104,12 @@ class CalculateIndicatorsTool implements FunctionToolInterface
 
         // 3. Facility Ratios per 10,000 and per 100,000 Population
         $facQuery = $datasetsTool->facilityQueryFor($location);
-        $healthCount = (clone $facQuery)->where('sector', 'health')->count();
-        $hospitalCount = (clone $facQuery)->where('sector', 'health')->where('facility_type', 'hospital')->count();
-        $educationCount = (clone $facQuery)->where('sector', 'education')->count();
-        $safetyCount = (clone $facQuery)->where('sector', 'safety')->count();
-        $telecomCount = $datasetsTool->telecomQueryFor($location)->count();
+        $hasFacilities = Schema::hasColumn('facilities', 'sector');
+        $healthCount = $hasFacilities ? (clone $facQuery)->where('sector', 'health')->count() : null;
+        $hospitalCount = $hasFacilities && Schema::hasColumn('facilities', 'facility_type') ? (clone $facQuery)->where('sector', 'health')->where('facility_type', 'hospital')->count() : null;
+        $educationCount = $hasFacilities ? (clone $facQuery)->where('sector', 'education')->count() : null;
+        $safetyCount = $hasFacilities ? (clone $facQuery)->where('sector', 'safety')->count() : null;
+        $telecomCount = Schema::hasTable('telecom_sites') ? $datasetsTool->telecomQueryFor($location)->count() : null;
 
         $perCapitaRatios = [
             'health_facilities_per_10k' => SpatialMetrics::ratePer($healthCount, $population, 10_000),

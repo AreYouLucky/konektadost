@@ -142,14 +142,14 @@ class GetLocalAssetsTool implements FunctionToolInterface
                 ->map(fn ($v) => (int) $v)
                 ->all();
 
-            $facilitiesSummary['by_education_level'] = (clone $baseFac)
+            $facilitiesSummary['by_education_level'] = Schema::hasColumn('facilities', 'level') ? (clone $baseFac)
                 ->where('sector', 'education')
                 ->select(DB::raw("COALESCE(NULLIF(level, ''), 'unclassified') as edu_level"), DB::raw('COUNT(*) as total'))
                 ->groupBy('edu_level')
                 ->orderByDesc('total')
                 ->pluck('total', 'edu_level')
                 ->map(fn ($v) => (int) $v)
-                ->all();
+                ->all() : [];
 
             if ($location instanceof Municipality) {
                 $byBarangayRows = (clone $baseFac)
