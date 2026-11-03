@@ -8,7 +8,6 @@ use App\FunctionTools\LayerE\AssessImplementationFeasibilityTool;
 use App\FunctionTools\LayerE\AssessInterventionSuitabilityTool;
 use App\FunctionTools\LayerE\EstimateInterventionRequirementsTool;
 use App\FunctionTools\LayerE\IdentifyImplementationPartnersTool;
-use App\FunctionTools\LayerE\MatchDostInterventionsTool;
 use App\FunctionTools\Support\LocationResolver;
 use App\Models\Municipality;
 
@@ -96,8 +95,8 @@ class GenerateInterventionPlanTool implements FunctionToolInterface
 
         // 2. Fetch Top Priority Barangays from Layer C
         $priorityResult = app(CalculatePriorityScoresTool::class)->execute(['municipality_id' => $municipality->id]);
-        $topBarangays = array_slice($priorityResult['priority_scores'] ?? [], 0, 5);
-        $targetBarangayNames = array_map(fn ($b) => $b['barangay_name'] ?? ('Barangay ' . $b['barangay_id']), $topBarangays);
+        $topBarangays = array_slice($priorityResult['barangays'] ?? $priorityResult['priority_scores'] ?? [], 0, 5);
+        $targetBarangayNames = array_map(fn ($b) => $b['name'] ?? $b['barangay_name'] ?? 'Unidentified barangay', $topBarangays);
 
         $interventionMeta = $suitability['intervention'] ?? [
             'id' => 'DOST-TECH-PROPOSAL',
@@ -115,16 +114,16 @@ class GenerateInterventionPlanTool implements FunctionToolInterface
                 'timeline_months' => 'Months 1 - 2',
                 'action_items' => [
                     'Execute tripartite Memorandum of Agreement (MOA) between DOST Regional Office/PSTO, Municipal LGU, and beneficiary communities.',
-                    'Convene local project steering committee with LGU department heads (' . ($partners['partners'][2]['suggested_role'] ?? 'LGU Focal') . ').',
-                    'Conduct ground-truth validation in pilot priority barangays: ' . implode(', ', array_slice($targetBarangayNames, 0, 3)),
+                    'Convene local project steering committee with LGU department heads ('.($partners['partners'][2]['suggested_role'] ?? 'LGU Focal').').',
+                    'Conduct ground-truth validation in pilot priority barangays: '.implode(', ', array_slice($targetBarangayNames, 0, 3)),
                 ],
             ],
             [
                 'phase' => 'Phase 2: Site Preparation & Utility Readiness',
                 'timeline_months' => 'Months 2 - 3',
                 'action_items' => [
-                    'Inspect and secure designated host facilities: ' . ($requirements['requirements']['facility_and_space']['facility_type'] ?? 'Municipal host venue'),
-                    'Verify electrical grounding and utility connections (' . ($requirements['requirements']['infrastructure_and_utilities']['electrical_power'] ?? '220V AC utility power') . ').',
+                    'Inspect and secure designated host facilities: '.($requirements['requirements']['facility_and_space']['facility_type'] ?? 'Municipal host venue'),
+                    'Verify electrical grounding and utility connections ('.($requirements['requirements']['infrastructure_and_utilities']['electrical_power'] ?? '220V AC utility power').').',
                     'Establish inventory handling and secure storage protocol for incoming equipment.',
                 ],
             ],
@@ -132,7 +131,7 @@ class GenerateInterventionPlanTool implements FunctionToolInterface
                 'phase' => 'Phase 3: Technology Delivery & Installation',
                 'timeline_months' => 'Months 3 - 4',
                 'action_items' => [
-                    'Dispatch and transport hardware: ' . ($requirements['requirements']['equipment_and_hardware']['primary_hardware'] ?? 'DOST Technology Package'),
+                    'Dispatch and transport hardware: '.($requirements['requirements']['equipment_and_hardware']['primary_hardware'] ?? 'DOST Technology Package'),
                     'Perform on-site installation, technical commissioning, and calibration testing under DOST engineer supervision.',
                     'Execute initial dry-run diagnostics and functionality verification.',
                 ],
@@ -141,7 +140,7 @@ class GenerateInterventionPlanTool implements FunctionToolInterface
                 'phase' => 'Phase 4: Capacity Building & Technology Transfer',
                 'timeline_months' => 'Months 4 - 5',
                 'action_items' => [
-                    'Conduct hands-on operators training: ' . implode('; ', $requirements['requirements']['human_resources_and_training']['required_training'] ?? ['Standard technical operations']),
+                    'Conduct hands-on operators training: '.implode('; ', $requirements['requirements']['human_resources_and_training']['required_training'] ?? ['Standard technical operations']),
                     'Deliver user manuals, standard operating procedures (SOPs), and maintenance checklists.',
                     'Certify designated municipal and barangay operators.',
                 ],
@@ -201,4 +200,3 @@ class GenerateInterventionPlanTool implements FunctionToolInterface
         ];
     }
 }
-

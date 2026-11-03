@@ -495,6 +495,32 @@ provenance cannot drift apart.
 
 ## Tests
 
+In the admin and user Intelligence Maps, select a province, municipality, or barangay, then check **Roads** in **Map markers and legend** to display orange road lines from `roads`. The Roads checkbox starts unchecked and stays disabled until a location is selected; Show all and Hide all include it. Barangay selections use `road_barangay.barangay_id` to choose road IDs and recorded barangay lengths, including explicitly linked cross-municipality segments. The `roads` table supplies geometry and road attributes; there is no fallback to all municipality roads. Click a road to inspect its recorded attributes. Original linked road segments can cross the selected boundary. Returning to the Philippines clears the overlay and cancels pending road requests; the national view does not fetch road geometry. Large selections load progressively through the authenticated `locations/{level}/{id}/roads` endpoint.
+
+```bash
+php artisan test --filter=RoadMapTest
+```
+
+### AI explanations in location assessment
+
+1. Set `OPENAI_API_KEY` and `OPENAI_MODEL` in `.env`. The key stays on the Laravel server.
+2. Run `php artisan config:clear` after changing these settings.
+3. Open a city or municipality assessment, then **Gaps & Priority** or **Interventions**. Opening either tab sends computed assessment evidence to OpenAI and generates one shared sector analysis. Other assessment tabs load without an AI request.
+4. Use the sector selectors to narrow the tables. Expand source notes, matching criteria, and implementation details when needed.
+
+AI explanations preserve the computed scores and benchmarks. Catalog recommendations are screening leads for LGU/DOST validation. The server validates catalog references and caches successful analysis for six hours, keyed by the evidence and model; changed evidence triggers a new analysis. Provider failures keep computed results visible and offer a retry.
+
+Empty sector results now explain whether there is no benchmark shortfall, insufficient evidence, or no implemented gap model. Agriculture and roads currently have descriptive analysis but no comparable gap indicator. Population density alone cannot select a technology. If linked inventory coordinates or barangay parents conflict with the selected municipality, the report flags the affected datasets and withholds their service-rate comparisons until the source links are verified. These checks do not rewrite source records.
+
+If PHP reports an HTTPS certificate error, set `OPENAI_CA_BUNDLE` to an absolute path to a trusted PEM CA bundle. TLS certificate verification stays enabled. `OPENAI_TIMEOUT` defaults to 60 seconds. Do not put the API key in a `VITE_` variable.
+
+Focused checks:
+
+```bash
+php artisan test --filter="AssessmentAiTest|FunctionToolDataIntegrityTest|AssessmentComputationCacheTest"
+npx tsc -p tsconfig.map-explorer.json --noEmit
+```
+
 ```bash
 php artisan test
 ```

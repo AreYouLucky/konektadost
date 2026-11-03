@@ -1,4 +1,6 @@
 import { NavUser } from '@/components/nav-user';
+import { PlanningChatLauncher } from '@/components/planning-chat';
+import { PlanningSavedPlans } from '@/components/planning-saved-plans';
 import {
     Sidebar,
     SidebarContent,
@@ -103,6 +105,9 @@ export function AppSidebarAdmin() {
                                 </SidebarMenuItem>
                             );
                         })}
+                        <SidebarMenuItem>
+                            <PlanningChatLauncher />
+                        </SidebarMenuItem>
                     </SidebarMenu>
                 </SidebarGroup>
 
@@ -134,6 +139,8 @@ export function AppSidebarAdmin() {
                         Data management is not enabled.
                     </p>
                 </SidebarGroup>
+
+                <PlanningSavedPlans />
 
                 <div className="mx-4 mt-auto rounded-2xl border border-blue-100 bg-blue-50/60 p-4 group-data-[collapsible=icon]:hidden">
                     <Globe2 className="mb-2.5 size-5 text-[#087dcc]" strokeWidth={1.5} aria-hidden="true" />

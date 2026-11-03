@@ -13,6 +13,7 @@ use App\Models\CollectionYear;
 use App\Models\Municipality;
 use App\Models\PlaceDescription;
 use App\Support\Assessment\LocationAssessor;
+use App\Support\Assessment\AssessmentInventoryIntegrity;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -23,6 +24,94 @@ use Tests\TestCase;
 /** Isolated source-data regression fixtures; never migrate or change the live database. */
 class FunctionToolDataIntegrityTest extends TestCase
 {
+    public function test_distant_inventory_records_do_not_suppress_gaps_by_inflating_local_rates(): void
+    {
+        DB::table('municipalities')->where('id', 11)->update(['bounds' => '[9.7,9.8,123.7,123.9]']);
+        Schema::create('facilities', function (Blueprint $table) {
+            $table->id(); $table->integer('municipality_id'); $table->string('sector');
+            $table->string('facility_type'); $table->double('latitude'); $table->double('longitude');
+        });
+        DB::table('facilities')->insert(['municipality_id' => 11, 'sector' => 'health', 'facility_type' => 'hospital', 'latitude' => 14.6, 'longitude' => 121.0]);
+        $municipality = Municipality::findOrFail(11);
+        $audit = app(AssessmentInventoryIntegrity::class)->forMunicipality($municipality);
+        $this->assertTrue($audit['has_conflicts']);
+        $this->assertSame(1, $audit['inventories'][0]['outside_bounds_count']);
+        $health = collect(app(LocationAssessor::class)->assess($municipality))->first(fn ($row) => $row->indicator->key === 'health_facilities_per_100k');
+        $this->assertSame('no_data', $health->status);
+        $this->assertNull($health->value);
+        $this->assertStringContainsString('location links are verified', $health->reason);
+        $this->assertSame(11, DB::table('facilities')->value('municipality_id'), 'Auditing must never remap source records.');
+    }
+
+    public function test_linked_barangay_in_another_municipality_is_flagged_even_without_coordinates(): void
+    {
+        DB::table('barangays')->insert(['id' => 101, 'municipality_id' => 12, 'brgy_name' => 'Foreign barangay']);
+        Schema::create('laboratories', function (Blueprint $table) {
+            $table->id(); $table->integer('municipality_id'); $table->integer('barangay_id')->nullable();
+        });
+        DB::table('laboratories')->insert(['municipality_id' => 11, 'barangay_id' => 101]);
+        $audit = app(AssessmentInventoryIntegrity::class)->forMunicipality(Municipality::findOrFail(11));
+        $this->assertTrue($audit['has_conflicts']);
+        $this->assertSame(1, $audit['inventories'][0]['barangay_parent_conflicts']);
+    }
+
+    public function test_valid_coordinates_near_bounds_are_not_reported_as_foreign_inventory(): void
+    {
+        DB::table('municipalities')->where('id', 11)->update(['bounds' => '[9.7,9.8,123.7,123.9]']);
+        Schema::create('telecom_sites', function (Blueprint $table) {
+            $table->id(); $table->integer('municipality_id'); $table->double('latitude')->nullable(); $table->double('longitude')->nullable();
+        });
+        DB::table('telecom_sites')->insert([['municipality_id' => 11, 'latitude' => 9.81, 'longitude' => 123.8], ['municipality_id' => 11, 'latitude' => null, 'longitude' => null]]);
+        $this->assertFalse(app(AssessmentInventoryIntegrity::class)->forMunicipality(Municipality::findOrFail(11))['has_conflicts']);
+    }
+
+    public function test_relevant_project_after_the_first_five_candidates_is_still_screened(): void
+    {
+        Schema::create('dost_projects', function (Blueprint $table) {
+            $table->id();
+            foreach (['project_title', 'sector', 'description', 'objectives', 'agency', 'program'] as $column) {
+                $table->text($column)->nullable();
+            }
+            $table->double('budget')->nullable();
+        });
+        for ($index = 0; $index < 5; $index++) {
+            DB::table('dost_projects')->insert(['project_title' => 'Road study '.$index]);
+        }
+        $id = DB::table('dost_projects')->insertGetId(['project_title' => 'Road infrastructure transportation design', 'sector' => 'Construction']);
+        $method = new ReflectionMethod(MatchDostInterventionsTool::class, 'findInterventionsForGap');
+        $matches = $method->invoke(app(MatchDostInterventionsTool::class), ['domain' => 'roads', 'gap_name' => 'Road access'], Municipality::findOrFail(11), []);
+        $this->assertContains('PROJ-'.$id, array_column($matches, 'intervention_id'));
+    }
+
+    public function test_layer_c_gap_contract_preserves_sector_label_and_severity_in_intervention_matching(): void
+    {
+        $matcher = new class extends MatchDostInterventionsTool
+        {
+            protected function gatherLocalContext(Municipality $municipality): array
+            {
+                return [];
+            }
+
+            protected function findInterventionsForGap(array $gap, Municipality $municipality, array $localContext): array
+            {
+                return [];
+            }
+        };
+        $result = $matcher->execute(['municipality_id' => 11, 'gaps' => [[
+            'indicator_key' => 'health_facilities_per_100k', 'label' => 'Health facilities',
+            'dimension' => 'health_and_public_health', 'severity_score' => 65.0,
+        ], [
+            'indicator_key' => 'road_density', 'label' => 'Road density',
+            'dimension' => 'infrastructure_and_connectivity', 'severity_score' => 25.0,
+        ]]]);
+        $this->assertSame('health', $result['gap_interventions'][0]['domain']);
+        $this->assertSame('Health facilities', $result['gap_interventions'][0]['gap_name']);
+        $this->assertSame('health_facilities_per_100k', $result['gap_interventions'][0]['gap_id']);
+        $this->assertSame(65.0, $result['gap_interventions'][0]['severity']);
+        $this->assertSame('roads', $result['gap_interventions'][1]['domain']);
+        $this->assertFalse($result['gap_interventions'][0]['has_suitable_intervention']);
+    }
+
     protected function setUp(): void
     {
         parent::setUp();

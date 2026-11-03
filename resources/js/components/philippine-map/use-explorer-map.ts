@@ -18,9 +18,11 @@ import {
     type Boundary,
     type MapLocation,
     type MapResourcePin,
+    type RoadCollection,
     type SatelliteConfig,
 } from './types';
 import { useResourcePins } from './use-resource-pins';
+import { useRoadLines } from './use-road-lines';
 
 const BRIGHT = 'https://tiles.openfreemap.org/styles/bright';
 const DEM = 'https://tiles.mapterhorn.com/tilejson.json';
@@ -45,6 +47,7 @@ function layerVisibility(layer: BasemapLayer, basemap: Basemap, showMapLines: bo
 }
 
 interface ExplorerMapOptions {
+    roads: RoadCollection;
     resourcePins: MapResourcePin[];
     rightPanelWidth: number;
     boundaries: Boundaries;
@@ -69,6 +72,7 @@ export function useExplorerMap(options: ExplorerMapOptions) {
     current.current = options;
     const [ready, setReady] = useState(false);
     useResourcePins(mapRef, ready, options.resourcePins);
+    useRoadLines(mapRef, ready, options.roads);
     const [terrain, setTerrain] = useState(options.initialTerrain);
     const [globe, setGlobe] = useState(options.initialGlobe);
     const [basemap, setBasemap] = useState<Basemap>(options.satellite ? 'streets' : 'hybrid');
@@ -296,9 +300,14 @@ export function useExplorerMap(options: ExplorerMapOptions) {
         };
 
         const select = (event: MapLayerMouseEvent) => {
-            const resourceLayers = ['resource-points', 'resource-clusters', 'telecom-points', 'telecom-clusters', 'dost-resource-points'].filter(
-                (layer) => map.getLayer(layer),
-            );
+            const resourceLayers = [
+                'resource-points',
+                'resource-clusters',
+                'telecom-points',
+                'telecom-clusters',
+                'dost-resource-points',
+                'selected-road-lines',
+            ].filter((layer) => map.getLayer(layer));
             if (resourceLayers.length && map.queryRenderedFeatures(event.point, { layers: resourceLayers }).length) return;
             const key = event.features?.[0]?.properties?.key;
             const location = current.current.boundaries.features.find((feature) => feature.properties.key === key)?.properties;

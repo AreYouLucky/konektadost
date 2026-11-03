@@ -7,6 +7,8 @@ use App\Http\Controllers\Admin\ProvinceAgricultureController;
 use App\Http\Controllers\Admin\ProvinceResourcesController;
 use App\Http\Controllers\Admin\SearchMapController;
 use App\Http\Controllers\LocationController;
+use App\Http\Controllers\LocationRoadsController;
+use App\Http\Controllers\PlanningChatController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -24,6 +26,18 @@ Route::middleware(['auth'])->group(function () {
     Route::get('location/assess/data', [LocationController::class, 'assessmentData'])->middleware('throttle:30,1')->name('location.assess.data');
     Route::post('location/assess/ai', [LocationController::class, 'assessmentAi'])->middleware('throttle:6,1')->name('location.assess.ai');
 
+    Route::prefix('planning-chat')->name('planning-chat.')->group(function () {
+        Route::get('locations', [PlanningChatController::class, 'locations'])->middleware('throttle:60,1')->name('locations');
+        Route::get('history', [PlanningChatController::class, 'history'])->middleware('throttle:60,1')->name('history');
+        Route::get('saved-plans', [PlanningChatController::class, 'savedPlans'])->middleware('throttle:60,1')->name('saved-plans');
+        Route::post('conversations/{conversation}/resume', [PlanningChatController::class, 'resume'])->whereNumber('conversation')->middleware('throttle:20,1')->name('resume');
+        Route::get('plans/{plan}', [PlanningChatController::class, 'plan'])->whereNumber('plan')->middleware('throttle:60,1')->name('plan');
+        Route::post('plans', [PlanningChatController::class, 'savePlan'])->middleware('throttle:20,1')->name('save-plan');
+        Route::get('/', [PlanningChatController::class, 'show'])->middleware('throttle:60,1')->name('show');
+        Route::post('/', [PlanningChatController::class, 'store'])->middleware('throttle:10,1')->name('store');
+        Route::delete('/', [PlanningChatController::class, 'destroy'])->middleware('throttle:10,1')->name('destroy');
+    });
+
     Route::prefix('intelligence-map')->name('user.intelligence-map.')->group(function () {
         Route::get('/', [SearchMapController::class, 'userMap'])->name('index');
         Route::middleware('throttle:180,1')->group(function () {
@@ -33,6 +47,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('geography', [SearchMapController::class, 'geography'])->name('geography');
             Route::get('search', [SearchMapController::class, 'search'])->name('search');
             Route::get('locations/{level}/{id}', [SearchMapController::class, 'selection'])->whereNumber('id')->name('selection');
+            Route::get('locations/{level}/{id}/roads', LocationRoadsController::class)->whereNumber('id')->name('roads');
         });
     });
 });
@@ -58,6 +73,7 @@ Route::middleware(['auth'])
                     Route::get('geography', [SearchMapController::class, 'geography'])->name('geography');
                     Route::get('search', [SearchMapController::class, 'search'])->name('search');
                     Route::get('locations/{level}/{id}', [SearchMapController::class, 'selection'])->whereNumber('id')->name('selection');
+                    Route::get('locations/{level}/{id}/roads', LocationRoadsController::class)->whereNumber('id')->name('roads');
                 });
             });
 

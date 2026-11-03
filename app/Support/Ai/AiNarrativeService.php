@@ -58,7 +58,7 @@ class AiNarrativeService
         $population = number_format($mun['population'] ?? 25000);
 
         $priorityBarangays = $context['executive_outputs']['priority_areas']['top_priority_barangays'] ?? [];
-        $topBarangayNames = array_map(fn ($b) => $b['barangay_name'] ?? ('Barangay ' . $b['barangay_id']), array_slice($priorityBarangays, 0, 3));
+        $topBarangayNames = array_map(fn ($b) => $b['name'] ?? $b['barangay_name'] ?? 'Unidentified barangay', array_slice($priorityBarangays, 0, 3));
         $topBarangayStr = !empty($topBarangayNames) ? implode(', ', $topBarangayNames) : 'remote barangays';
 
         $gaps = $context['executive_outputs']['critical_needs']['identified_gaps'] ?? [];

@@ -73,15 +73,15 @@ class DefinePerformanceIndicatorsTool implements FunctionToolInterface
             ];
         }
 
-        $domain = strtolower((string)($args['domain'] ?? 'general'));
+        $domain = strtolower((string) ($args['domain'] ?? 'general'));
 
         $priorityResult = app(CalculatePriorityScoresTool::class)->execute(['municipality_id' => $municipality->id]);
-        $priorityCount = count($priorityResult['priority_scores'] ?? []);
-        $targetBarangaysCovered = max(3, min(10, (int)ceil($priorityCount * 0.5)));
+        $priorityCount = count($priorityResult['barangays'] ?? $priorityResult['priority_scores'] ?? []);
+        $targetBarangaysCovered = max(3, min(10, (int) ceil($priorityCount * 0.5)));
         $population = $municipality->populationFigure?->population ?? 25000;
 
-        $targetTrained = max(20, min(150, (int)round(($population / 1000) * 3)));
-        $targetBeneficiaries = max(500, min(15000, (int)round($population * 0.15)));
+        $targetTrained = max(20, min(150, (int) round(($population / 1000) * 3)));
+        $targetBeneficiaries = max(500, min(15000, (int) round($population * 0.15)));
 
         $kpis = [
             [
@@ -153,7 +153,7 @@ class DefinePerformanceIndicatorsTool implements FunctionToolInterface
                 'indicator_name' => 'Telehealth & Diagnostic Screenings Conducted',
                 'category' => 'Service Delivery',
                 'baseline' => 0,
-                'target' => max(300, min(5000, (int)round($population * 0.08))),
+                'target' => max(300, min(5000, (int) round($population * 0.08))),
                 'unit' => 'screenings / consultations',
                 'measurement_method' => 'Rural Health Unit digital diagnostic log',
                 'reporting_frequency' => 'Monthly',
@@ -166,7 +166,7 @@ class DefinePerformanceIndicatorsTool implements FunctionToolInterface
                 'indicator_name' => 'Digital Learning Material Accesses / Research Sessions',
                 'category' => 'Service Delivery',
                 'baseline' => 0,
-                'target' => max(1000, min(20000, (int)round($population * 0.25))),
+                'target' => max(1000, min(20000, (int) round($population * 0.25))),
                 'unit' => 'user queries / student sessions',
                 'measurement_method' => 'STARBOOKS automated digital access counter',
                 'reporting_frequency' => 'Quarterly',
@@ -193,4 +193,3 @@ class DefinePerformanceIndicatorsTool implements FunctionToolInterface
         ];
     }
 }
-

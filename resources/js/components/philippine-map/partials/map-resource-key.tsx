@@ -46,6 +46,7 @@ export default function MapResourceKey({
     loading = false,
     error,
     onRetry,
+    roads,
 }: {
     selected: MapLocation | null;
     hasBoundary: boolean;
@@ -55,6 +56,16 @@ export default function MapResourceKey({
     loading?: boolean;
     error?: string | null;
     onRetry?: () => void;
+    roads?: {
+        visible: boolean;
+        onChange: (visible: boolean) => void;
+        count: number;
+        loading: boolean;
+        error: string | null;
+        message: string | null;
+        omitted: number;
+        retry: () => void;
+    };
 }) {
     const id = useId();
     const counts: Record<MarkerGroup, number> = { laboratories: 0, technologies: 0, telecom: 0, facilities: 0 };
@@ -101,18 +112,70 @@ export default function MapResourceKey({
                         />
                     </label>
                 ))}
+                {roads && (
+                    <label
+                        htmlFor={`${id}-roads`}
+                        className={`flex min-h-9 items-center gap-2 rounded-lg border px-2 py-1 ${!selected ? 'cursor-not-allowed border-transparent text-[#738580] opacity-60' : roads.visible ? 'cursor-pointer border-[#087dcc]/15 bg-[#eff6ff]' : 'cursor-pointer border-transparent bg-white/50 text-[#738580]'}`}
+                    >
+                        <svg
+                            viewBox="0 0 24 24"
+                            className="h-6 w-5 shrink-0 text-amber-500"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            aria-hidden="true"
+                        >
+                            <path d="M7 2 3 22M17 2l4 20M12 3v4m0 3v4m0 3v4" />
+                        </svg>
+                        <span className="flex-1 text-[11px] font-medium">Roads</span>
+                        <span className="text-[10px] tabular-nums" aria-live="polite">
+                            {roads.loading ? 'Loading…' : roads.count.toLocaleString()}
+                        </span>
+                        <input
+                            id={`${id}-roads`}
+                            type="checkbox"
+                            checked={Boolean(selected && roads.visible)}
+                            disabled={!selected}
+                            onChange={(event) => roads.onChange(event.target.checked)}
+                            className="size-3.5 cursor-pointer accent-[#087dcc] disabled:cursor-not-allowed"
+                        />
+                    </label>
+                )}
             </fieldset>
+            {roads && !selected && <p className="mt-1 text-[10px] text-[#738580]">Select a location to show roads.</p>}
+            {roads && selected && roads.visible && (
+                <div className="mt-1 text-[10px]">
+                    {roads.error ? (
+                        <p role="alert" className="text-amber-800">
+                            {roads.error}{' '}
+                            <button type="button" onClick={roads.retry} className="font-semibold underline">
+                                Retry roads
+                            </button>
+                        </p>
+                    ) : (
+                        roads.message && <p>{roads.message}</p>
+                    )}
+                    {roads.omitted > 0 && <p>{roads.omitted.toLocaleString()} records have no usable line geometry.</p>}
+                    {selected.level === 'barangay' && <p className="text-[#738580]">Linked road segments may extend beyond the barangay boundary.</p>}
+                </div>
+            )}
             <div className="mt-1 flex justify-between text-[10px]">
                 <button
                     type="button"
-                    onClick={() => onVisibilityChange({ ...ALL_MARKERS_VISIBLE })}
+                    onClick={() => {
+                        onVisibilityChange({ ...ALL_MARKERS_VISIBLE });
+                        if (selected) roads?.onChange(true);
+                    }}
                     className="min-h-7 font-semibold text-[#087dcc] hover:underline"
                 >
                     Show all
                 </button>
                 <button
                     type="button"
-                    onClick={() => onVisibilityChange({ laboratories: false, technologies: false, telecom: false, facilities: false })}
+                    onClick={() => {
+                        onVisibilityChange({ laboratories: false, technologies: false, telecom: false, facilities: false });
+                        roads?.onChange(false);
+                    }}
                     className="min-h-7 text-[#087dcc] hover:underline"
                 >
                     Hide all

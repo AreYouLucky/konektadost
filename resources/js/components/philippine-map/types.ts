@@ -1,4 +1,4 @@
-import type { Feature, FeatureCollection, MultiPolygon, Polygon } from 'geojson';
+import type { Feature, FeatureCollection, LineString, MultiLineString, MultiPolygon, Polygon } from 'geojson';
 import type { ReactNode } from 'react';
 
 export type GeographicLevel = 'province' | 'municipality' | 'barangay';
@@ -57,6 +57,7 @@ export interface SearchMapProps {
 }
 
 export interface GeographyApi {
+    roads?: (level: GeographicLevel, id: number, cursor?: number) => string;
     geography: (level: GeographicLevel, parent?: number) => string;
     selection: (level: GeographicLevel, id: number) => string;
     search: (query: string) => string;
@@ -66,6 +67,7 @@ export type MapRoutePrefix = 'admin.search-map' | 'user.intelligence-map';
 
 export function geographyApi(routePrefix: MapRoutePrefix): GeographyApi {
     return {
+        roads: (level, id, cursor = 0) => route(`${routePrefix}.roads`, { level, id, cursor }),
         geography: (level, parent) => route(`${routePrefix}.geography`, { level, ...(parent ? { parent } : {}) }),
         selection: (level, id) => route(`${routePrefix}.selection`, { level, id }),
         search: (q) => route(`${routePrefix}.search`, { q }),
@@ -73,6 +75,7 @@ export function geographyApi(routePrefix: MapRoutePrefix): GeographyApi {
 }
 
 export const ADMIN_GEOGRAPHY_API: GeographyApi = {
+    roads: (level, id, cursor = 0) => route('admin.search-map.roads', { level, id, cursor }),
     geography: (level, parent) => route('admin.search-map.geography', { level, ...(parent ? { parent } : {}) }),
     selection: (level, id) => route('admin.search-map.selection', { level, id }),
     search: (q) => route('admin.search-map.search', { q }),
@@ -105,6 +108,32 @@ export interface PhilippineMapProps extends Partial<SearchMapProps> {
 }
 
 export const EMPTY_BOUNDARIES: Boundaries = { type: 'FeatureCollection', features: [] };
+export interface RoadProperties {
+    barangay_id?: number | null;
+    barangay_length_m?: number | null;
+    id: number;
+    name: string;
+    road_code: string | null;
+    road_class: string;
+    surface_type: string;
+    road_condition: string;
+    length_m: number | null;
+    width_m: number | null;
+    municipality_id: number;
+    source: string | null;
+    reference_date: string | null;
+}
+export type RoadCollection = FeatureCollection<LineString | MultiLineString, RoadProperties>;
+export interface RoadResponse extends RoadCollection {
+    meta: {
+        scope: { key: string; level: GeographicLevel; id: number };
+        status: 'available' | 'empty' | 'unavailable';
+        message: string | null;
+        next_cursor: number | null;
+        omitted_geometries: number;
+    };
+}
+export const EMPTY_ROADS: RoadCollection = { type: 'FeatureCollection', features: [] };
 export const LEVEL_LABELS: Record<GeographicLevel, string> = { province: 'Province', municipality: 'City / Municipality', barangay: 'Barangay' };
 
 export async function getGeography<T>(url: string, signal: AbortSignal): Promise<T> {

@@ -8,9 +8,10 @@ import MapToolbar from './partials/map-toolbar';
 import SearchBar from './partials/search-bar';
 import './philippine-map.css';
 import { markerGroup, type MarkerVisibility } from './resource-marker-designs';
-import { ADMIN_GEOGRAPHY_API, LEVEL_LABELS, type MapLocation, type MapResourcePin, type PhilippineMapProps } from './types';
+import { ADMIN_GEOGRAPHY_API, EMPTY_ROADS, LEVEL_LABELS, type MapLocation, type MapResourcePin, type PhilippineMapProps } from './types';
 import { useExplorerMap } from './use-explorer-map';
 import { useGeography } from './use-geography';
+import { useSelectedRoads } from './use-selected-roads';
 
 const EMPTY_LOCATIONS: MapLocation[] = [];
 const EMPTY_PINS: MapResourcePin[] = [];
@@ -43,6 +44,7 @@ export default function PhilippineMap({
     selectionCallback.current = onSelectionChange;
     const [hovered, setHovered] = useState<string | null>(null);
     const [expanded, setExpanded] = useState(false);
+    const [roadsVisible, setRoadsVisible] = useState(false);
     const [markerVisibility, setMarkerVisibility] = useState<MarkerVisibility>({
         laboratories: true,
         technologies: true,
@@ -50,6 +52,7 @@ export default function PhilippineMap({
         facilities: false,
     });
     const selected = geography.path.at(-1) ?? null;
+    const roads = useSelectedRoads(selected, api);
     const scopedPins = useMemo(() => scopeMapPins(resourcePins, selected, geography.boundary), [resourcePins, selected, geography.boundary]);
     const visiblePins = useMemo(() => scopedPins.filter((pin) => markerVisibility[markerGroup(pin.category)]), [scopedPins, markerVisibility]);
     const hasSelectionContent = Boolean(selectionContent);
@@ -68,6 +71,7 @@ export default function PhilippineMap({
         [navigate],
     );
     const map = useExplorerMap({
+        roads: roadsVisible ? roads.data : EMPTY_ROADS,
         resourcePins: visiblePins,
         rightPanelWidth,
         boundaries: geography.boundaries,
@@ -248,7 +252,7 @@ export default function PhilippineMap({
                     satelliteAvailable={satellite !== null}
                     onReset={reset}
                     markerControls={
-                        resourcePins !== EMPTY_PINS ? (
+                        resourcePins !== EMPTY_PINS || api.roads ? (
                             <MapResourceKey
                                 selected={selected}
                                 hasBoundary={geography.boundary !== null}
@@ -258,11 +262,24 @@ export default function PhilippineMap({
                                 loading={resourceLoading}
                                 error={resourceError}
                                 onRetry={onRetryResources}
+                                roads={
+                                    api.roads
+                                        ? {
+                                              visible: roadsVisible,
+                                              onChange: setRoadsVisible,
+                                              count: roads.data.features.length,
+                                              loading: roads.loading,
+                                              error: roads.error,
+                                              message: roads.message,
+                                              omitted: roads.omitted,
+                                              retry: roads.retry,
+                                          }
+                                        : undefined
+                                }
                             />
                         ) : undefined
                     }
                 />
-
                 {context && (
                     <div className="map-hover-label" aria-hidden="true">
                         <MapPin size={12} />

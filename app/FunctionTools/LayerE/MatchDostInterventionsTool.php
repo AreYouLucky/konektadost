@@ -13,7 +13,7 @@ use App\Models\Facility;
 use App\Models\Municipality;
 use App\Models\Technology;
 use App\Models\TelecomSite;
-use App\Support\Assessment\IndicatorCatalog;
+use App\Support\Assessment\GapAssessmentDiagnostics;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -121,16 +121,7 @@ class MatchDostInterventionsTool implements FunctionToolInterface
             $gap['gap_id'] = $gap['gap_id'] ?? $gap['indicator_key'] ?? 'unknown_gap';
             $gap['gap_name'] = $gap['gap_name'] ?? $gap['label'] ?? 'Identified Gap';
             $gap['severity'] = $gap['severity'] ?? $gap['severity_score'] ?? null;
-            $gap['domain'] = $gap['domain'] ?? match ($gap['dimension'] ?? '') {
-                IndicatorCatalog::DIMENSION_HEALTH => 'health',
-                IndicatorCatalog::DIMENSION_EDUCATION => 'education',
-                IndicatorCatalog::DIMENSION_STI => 'sti_capacity',
-                IndicatorCatalog::DIMENSION_CONNECTIVITY => str_contains($gap['indicator_key'] ?? '', 'road') ? 'roads' : 'digital_connectivity',
-                IndicatorCatalog::DIMENSION_DRR_SAFETY => 'safety_drrm',
-                IndicatorCatalog::DIMENSION_POPULATION => 'population',
-                'agriculture_fisheries_food' => 'agriculture',
-                default => 'general',
-            };
+            $gap['domain'] = $gap['domain'] ?? GapAssessmentDiagnostics::sector($gap['dimension'] ?? '', $gap['indicator_key'] ?? '');
             $domain = $gap['domain'] ?? 'general';
             if ($filterSector !== null && !str_contains(strtolower($domain), $filterSector) && !str_contains(strtolower($gap['gap_name'] ?? ''), $filterSector)) {
                 continue;
@@ -147,8 +138,10 @@ class MatchDostInterventionsTool implements FunctionToolInterface
                 'affected_barangays_count' => count($gap['affected_barangays'] ?? []),
                 'matched_interventions' => $matchesForGap,
                 'has_suitable_intervention' => !empty($matchesForGap),
-                'gap_unmatched_note' => empty($matchesForGap) 
-                    ? 'No verified DOST catalog intervention currently recorded for this specific gap domain. Do not force arbitrary matches.' 
+                'gap_unmatched_note' => empty($matchesForGap)
+                    ? ($domain === 'population'
+                        ? 'Population density is a planning pressure, not a specific technology need. Validate sector and barangay needs before selecting a DOST intervention.'
+                        : 'Catalog records were screened, but none met the sector relevance criteria for this gap. Review local needs and catalog evidence with DOST.')
                     : null,
             ];
         }
@@ -279,7 +272,6 @@ class MatchDostInterventionsTool implements FunctionToolInterface
                 }
             })
             ->whereNotNull('project_title')
-            ->take(5)
             ->get() : collect();
 
         foreach ($matchingProjects as $proj) {

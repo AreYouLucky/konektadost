@@ -40,6 +40,7 @@ class MunicipalityAssessmentData
                 'population_statistics' => $profile['population_statistics'] ?? null,
             ],
             'municipalityProfile' => $profile,
+            'inventoryIntegrity' => app(AssessmentInventoryIntegrity::class)->forMunicipality($municipality),
             // The interactive report shows Layers A-E. Generate executive plans only on explicit Layer F requests.
             'functionToolsBundle' => app(AssessmentFunctionTools::class)->computeLocationBundle($municipality, includeActionPlan: false),
             'layerEResult' => app(FunctionToolRegistry::class)->executeLayerE($municipality),

@@ -1,3 +1,4 @@
+import { PlanningChatProvider } from '@/components/planning-chat';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { useState } from 'react';
 
@@ -22,8 +23,10 @@ export function AppShell({ children, variant = 'header' }: AppShellProps) {
     }
 
     return (
-        <SidebarProvider defaultOpen={isOpen} open={isOpen} onOpenChange={handleSidebarChange}>
-            {children}
-        </SidebarProvider>
+        <PlanningChatProvider>
+            <SidebarProvider defaultOpen={isOpen} open={isOpen} onOpenChange={handleSidebarChange}>
+                {children}
+            </SidebarProvider>
+        </PlanningChatProvider>
     );
 }

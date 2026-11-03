@@ -4,6 +4,7 @@ namespace App\Support\Assessment;
 
 use App\Models\Barangay;
 use App\Models\CollectionYear;
+use App\Models\Municipality;
 use App\Models\PlaceDescription;
 use App\Models\TelecomSite;
 use Illuminate\Database\Eloquent\Model;
@@ -85,6 +86,7 @@ class LocationAssessor
             'population' => $population,
             'area_km2' => $location->area_km2,
             'counts' => $this->countsFor($location, $population),
+            'unavailable' => $location instanceof Municipality ? app(AssessmentInventoryIntegrity::class)->indicatorProblemsFor($location) : [],
         ];
     }
 
@@ -219,6 +221,10 @@ class LocationAssessor
      */
     private function measure(Indicator $indicator, array $context): IndicatorResult
     {
+        if (isset($context['unavailable'][$indicator->key])) {
+            return new IndicatorResult(indicator: $indicator, status: IndicatorResult::STATUS_NO_DATA,
+                reason: $context['unavailable'][$indicator->key]);
+        }
         $population = $context['population'];
 
         if ($population === null || $population <= 0) {

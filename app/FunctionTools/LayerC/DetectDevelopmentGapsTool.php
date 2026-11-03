@@ -14,6 +14,7 @@ use App\Models\Municipality;
 use App\Support\Assessment\AssessmentComputationCache;
 use App\Support\Assessment\IndicatorResult;
 use App\Support\Assessment\LocationAssessor;
+use App\Support\Assessment\GapAssessmentDiagnostics;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -204,6 +205,7 @@ class DetectDevelopmentGapsTool implements FunctionToolInterface
             'high_confidence_gaps' => $highConfidenceGaps,
             'provisional_gaps' => count($gaps) - $highConfidenceGaps,
             'gaps' => $gaps,
+            'sector_diagnostics' => app(GapAssessmentDiagnostics::class)->summarize($results),
             'data_limitations' => $dataLimitations,
         ];
     }

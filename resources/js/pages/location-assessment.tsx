@@ -1,9 +1,16 @@
+import AssessmentAiAnalysis, { useAssessmentAi } from '@/components/assessment-ai-analysis';
+import {
+    GapSectorTable,
+    InterventionSectorTable,
+    SectorSelect,
+    indicatorSector,
+    type SectorGapDiagnostic,
+} from '@/components/assessment-sector-tables';
 import AsyncLocationAssessment, { type PendingAssessment } from '@/components/async-location-assessment';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import AppSidebarLayout from '@/layouts/app/app-sidebar-layout';
 import AppSidebarLayoutAdmin from '@/layouts/app/app-sidebar-layout-admin';
 import { evidenceState, type ProjectCatalogData } from '@/lib/assessment-planning';
@@ -11,30 +18,20 @@ import { AgricultureSummaryView } from '@/pages/admin/search-map/partials/provin
 import ProvinceResourceOverview from '@/pages/admin/search-map/partials/province-resource-overview';
 import type { AgricultureSummary } from '@/pages/admin/search-map/use-province-agriculture';
 import type { ProvinceResourceData } from '@/pages/admin/search-map/use-province-resources';
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import {
     Activity,
     AlertTriangle,
     ArrowLeft,
-    BarChart3,
     Building2,
-    CheckCircle2,
-    Clock,
-    Coins,
-    Cpu,
-    FileText,
     FlaskConical,
-    Info,
-    Layers,
     MapPin,
     Navigation,
     Radio,
     Search,
     ShieldCheck,
     Sparkles,
-    TrendingUp,
     Users,
-    Wrench,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
@@ -226,6 +223,7 @@ interface FunctionToolsBundle {
         safety_and_drrm?: any;
     };
     detected_gaps?: {
+        sector_diagnostics?: SectorGapDiagnostic[];
         total_gaps_detected: number;
         critical_severity_count?: number;
         critical_gaps_count?: number;
@@ -247,6 +245,17 @@ interface FunctionToolsBundle {
 }
 
 export interface AssessmentPageProps {
+    inventoryIntegrity?: {
+        has_conflicts: boolean;
+        inventories: {
+            dataset: string;
+            linked_records: number;
+            outside_bounds_count: number;
+            barangay_parent_conflicts: number;
+            has_conflicts: boolean;
+            reason: string | null;
+        }[];
+    };
     location: {
         psg_code: string | null;
         province_psg_code?: string | null;
@@ -296,6 +305,8 @@ export default function LocationAssessment(props: AssessmentPageProps | { pendin
 
 function LocationAssessmentReport({
     location,
+    inventoryIntegrity,
+    focus,
     results,
     barangayAssessment,
     localLaboratories = [],
@@ -309,12 +320,12 @@ function LocationAssessmentReport({
     analysisScopeNotice,
     resourceSummary,
     agricultureSummary,
-    projectCatalog,
 }: AssessmentPageProps) {
     const [activeSection, setActiveSection] = useState<ActiveSection>('profile_assets');
+    const aiEnabled = !!functionToolsBundle && !!location.psg_code;
+    const ai = useAssessmentAi(location.psg_code, focus, activeSection === 'gaps_barangays' || activeSection === 'matched_interventions', aiEnabled);
 
     const shortfalls = results.filter((r) => evidenceState(r) === 'priority');
-    const measuredCount = results.filter((r) => evidenceState(r) !== 'missing').length;
 
     const backParams = location.province_psg_code ? { province: location.province_psg_code, city: location.psg_code } : { city: location.psg_code };
 
@@ -348,7 +359,8 @@ function LocationAssessmentReport({
                                     {location.name} Assessment
                                 </h1>
                                 <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-500">
-                                    Computed indicators, dynamic national benchmark comparisons, barangay priority breakdowns, and local resource inventories.
+                                    Computed indicators, dynamic national benchmark comparisons, barangay priority breakdowns, and local resource
+                                    inventories.
                                 </p>
                             </div>
                         </div>
@@ -356,18 +368,36 @@ function LocationAssessmentReport({
                 </div>
 
                 {/* Unified Location Overview Bar */}
-                <LocationOverviewBar
-                    location={location}
-                    populationYear={populationYear}
-                />
+                <LocationOverviewBar location={location} populationYear={populationYear} />
                 {populationReason && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{populationReason}</p>}
-                {analysisScopeNotice && <p className="rounded-lg bg-blue-50 p-3 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-300">{analysisScopeNotice}</p>}
+                {inventoryIntegrity?.has_conflicts && (
+                    <section
+                        role="alert"
+                        className="min-w-0 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:bg-amber-950 dark:text-amber-100"
+                    >
+                        <h2 className="font-semibold">Inventory location conflicts detected</h2>
+                        <p className="mt-1">
+                            Some records linked to {location.name} have coordinates outside the municipality or reference barangays in another
+                            municipality. Affected service-rate comparisons are withheld; inventory totals and planning evaluations need validation.
+                        </p>
+                        <details className="mt-2">
+                            <summary className="cursor-pointer font-medium">Show affected datasets</summary>
+                            <ul className="mt-2 space-y-2">
+                                {inventoryIntegrity.inventories
+                                    .filter((item) => item.has_conflicts)
+                                    .map((item) => (
+                                        <li key={item.dataset}>{item.reason}</li>
+                                    ))}
+                            </ul>
+                        </details>
+                    </section>
+                )}
+                {analysisScopeNotice && (
+                    <p className="rounded-lg bg-blue-50 p-3 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-300">{analysisScopeNotice}</p>
+                )}
 
                 {/* 5-Tab Workflow Strip (Layers A - E) */}
-                <nav
-                    aria-label="Assessment workflow steps"
-                    className="grid grid-cols-2 gap-2.5 sm:grid-cols-5"
-                >
+                <nav aria-label="Assessment workflow steps" className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
                     {/* Tab 1: Layer A */}
                     <button
                         type="button"
@@ -375,14 +405,14 @@ function LocationAssessmentReport({
                         className={`flex flex-col gap-1 rounded-xl border p-3.5 text-left transition-all ${
                             activeSection === 'profile_assets'
                                 ? 'border-[#087dcc] bg-[#087dcc] text-white shadow-md'
-                                : 'border-blue-100 bg-white hover:border-blue-300 dark:border-slate-800 dark:bg-slate-950 text-slate-800 dark:text-slate-200'
+                                : 'border-blue-100 bg-white text-slate-800 hover:border-blue-300 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200'
                         }`}
                     >
                         <div className="flex items-center justify-between text-[10px] font-semibold tracking-wider uppercase opacity-80">
                             <span>Layer A</span>
                             <Building2 className="size-3.5" />
                         </div>
-                        <div className="mt-0.5 font-semibold text-sm">Profile &amp; Assets</div>
+                        <div className="mt-0.5 text-sm font-semibold">Profile &amp; Assets</div>
                         <p className="text-[11px] opacity-75">Demographics, counts &amp; audit</p>
                     </button>
 
@@ -393,14 +423,14 @@ function LocationAssessmentReport({
                         className={`flex flex-col gap-1 rounded-xl border p-3.5 text-left transition-all ${
                             activeSection === 'sectors_roads'
                                 ? 'border-[#087dcc] bg-[#087dcc] text-white shadow-md'
-                                : 'border-blue-100 bg-white hover:border-blue-300 dark:border-slate-800 dark:bg-slate-950 text-slate-800 dark:text-slate-200'
+                                : 'border-blue-100 bg-white text-slate-800 hover:border-blue-300 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200'
                         }`}
                     >
                         <div className="flex items-center justify-between text-[10px] font-semibold tracking-wider uppercase opacity-80">
                             <span>Layer B</span>
                             <Activity className="size-3.5" />
                         </div>
-                        <div className="mt-0.5 font-semibold text-sm">Sectors &amp; Roads</div>
+                        <div className="mt-0.5 text-sm font-semibold">Sectors &amp; Roads</div>
                         <p className="text-[11px] opacity-75">Indicators, roads &amp; telecom</p>
                     </button>
 
@@ -411,15 +441,17 @@ function LocationAssessmentReport({
                         className={`flex flex-col gap-1 rounded-xl border p-3.5 text-left transition-all ${
                             activeSection === 'gaps_barangays'
                                 ? 'border-[#087dcc] bg-[#087dcc] text-white shadow-md'
-                                : 'border-blue-100 bg-white hover:border-blue-300 dark:border-slate-800 dark:bg-slate-950 text-slate-800 dark:text-slate-200'
+                                : 'border-blue-100 bg-white text-slate-800 hover:border-blue-300 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200'
                         }`}
                     >
                         <div className="flex items-center justify-between text-[10px] font-semibold tracking-wider uppercase opacity-80">
                             <span>Layer C</span>
                             <MapPin className="size-3.5" />
                         </div>
-                        <div className="mt-0.5 font-semibold text-sm">Gaps &amp; Priority</div>
-                        <p className="text-[11px] opacity-75">{highPriorityBarangayCount} priority of {barangayCount} brgys</p>
+                        <div className="mt-0.5 text-sm font-semibold">Gaps &amp; Priority</div>
+                        <p className="text-[11px] opacity-75">
+                            {highPriorityBarangayCount} priority of {barangayCount} brgys
+                        </p>
                     </button>
 
                     {/* Tab 4: Layer D */}
@@ -429,14 +461,14 @@ function LocationAssessmentReport({
                         className={`flex flex-col gap-1 rounded-xl border p-3.5 text-left transition-all ${
                             activeSection === 'dost_catalog'
                                 ? 'border-[#087dcc] bg-[#087dcc] text-white shadow-md'
-                                : 'border-blue-100 bg-white hover:border-blue-300 dark:border-slate-800 dark:bg-slate-950 text-slate-800 dark:text-slate-200'
+                                : 'border-blue-100 bg-white text-slate-800 hover:border-blue-300 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200'
                         }`}
                     >
                         <div className="flex items-center justify-between text-[10px] font-semibold tracking-wider uppercase opacity-80">
                             <span>Layer D</span>
                             <FlaskConical className="size-3.5" />
                         </div>
-                        <div className="mt-0.5 font-semibold text-sm">DOST Track &amp; Catalog</div>
+                        <div className="mt-0.5 text-sm font-semibold">DOST Track &amp; Catalog</div>
                         <p className="text-[11px] opacity-75">Projects history &amp; tech catalog</p>
                     </button>
 
@@ -447,14 +479,14 @@ function LocationAssessmentReport({
                         className={`flex flex-col gap-1 rounded-xl border p-3.5 text-left transition-all ${
                             activeSection === 'matched_interventions'
                                 ? 'border-[#087dcc] bg-[#087dcc] text-white shadow-md'
-                                : 'border-blue-100 bg-white hover:border-blue-300 dark:border-slate-800 dark:bg-slate-950 text-slate-800 dark:text-slate-200'
+                                : 'border-blue-100 bg-white text-slate-800 hover:border-blue-300 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200'
                         }`}
                     >
                         <div className="flex items-center justify-between text-[10px] font-semibold tracking-wider uppercase opacity-80">
                             <span>Layer E</span>
                             <Sparkles className="size-3.5" />
                         </div>
-                        <div className="mt-0.5 font-semibold text-sm">Interventions</div>
+                        <div className="mt-0.5 text-sm font-semibold">Interventions</div>
                         <p className="text-[11px] opacity-75">Matching, partners &amp; requirements</p>
                     </button>
                 </nav>
@@ -469,10 +501,7 @@ function LocationAssessmentReport({
                         />
 
                         {functionToolsBundle?.dataset_audit && (
-                            <DatasetAuditSection
-                                cityName={location.name}
-                                audit={functionToolsBundle.dataset_audit}
-                            />
+                            <DatasetAuditSection cityName={location.name} audit={functionToolsBundle.dataset_audit} />
                         )}
                     </div>
                 )}
@@ -481,14 +510,13 @@ function LocationAssessmentReport({
                 {activeSection === 'sectors_roads' && (
                     <div className="flex flex-col gap-6">
                         {/* Road Accessibility and Telecom Cards */}
-                        <div className="grid gap-6 md:grid-cols-2">
-                            <RoadAccessibilityCard
-                                roadAccessibility={functionToolsBundle?.sector_analysis?.road_accessibility}
-                            />
-                            <TelecomConnectivityCard
-                                telecom={functionToolsBundle?.telecom_infrastructure}
-                            />
-                        </div>
+                        <details className="rounded-xl border border-blue-100 bg-white p-4 dark:bg-slate-950">
+                            <summary className="cursor-pointer text-sm font-medium text-[#087dcc]">Road &amp; telecom inventory details</summary>
+                            <div className="mt-4 grid gap-6 md:grid-cols-2">
+                                <RoadAccessibilityCard roadAccessibility={functionToolsBundle?.sector_analysis?.road_accessibility} />
+                                <TelecomConnectivityCard telecom={functionToolsBundle?.telecom_infrastructure} />
+                            </div>
+                        </details>
 
                         {/* Benchmark Comparisons */}
                         <section
@@ -510,7 +538,8 @@ function LocationAssessmentReport({
                                         Indicators &amp; Dynamic Benchmark Comparison
                                     </h2>
                                     <p className="text-muted-foreground max-w-3xl text-sm leading-relaxed">
-                                        Compares {location.name}’s measured rates against dynamically computed national reference rates across all live domain tables.
+                                        Compares {location.name}’s measured rates against dynamically computed national reference rates across all
+                                        live domain tables.
                                     </p>
                                 </div>
                             </header>
@@ -518,27 +547,32 @@ function LocationAssessmentReport({
                             <div className="p-4 sm:p-6">
                                 <div className="flex flex-col gap-5">
                                     {shortfalls.length > 0 && (
-                                        <Card className="rounded-xl border-amber-200 bg-amber-50/70 shadow-sm dark:bg-amber-950/20">
-                                            <CardHeader className="pb-2">
-                                                <CardTitle className="flex items-center gap-2 text-sm text-amber-900 dark:text-amber-200">
-                                                    <AlertTriangle className="size-4 shrink-0 text-amber-600" />
-                                                    <span>Detected Indicator Shortfalls &amp; Pressures ({shortfalls.length})</span>
-                                                </CardTitle>
-                                            </CardHeader>
-                                            <CardContent className="grid gap-2 sm:grid-cols-2">
-                                                {shortfalls.map((result) => (
-                                                    <div
-                                                        key={result.key}
-                                                        className="bg-background/90 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200/70 px-3 py-2.5 text-xs"
-                                                    >
-                                                        <span className="font-medium">{result.label}</span>
-                                                        <span className="text-muted-foreground font-mono">
-                                                            {format(result.value)} vs {format(result.benchmark)} ({result.unit})
-                                                        </span>
-                                                    </div>
-                                                ))}
-                                            </CardContent>
-                                        </Card>
+                                        <details>
+                                            <summary className="cursor-pointer text-xs font-medium text-amber-800 dark:text-amber-300">
+                                                {shortfalls.length} indicator shortfalls &amp; pressures
+                                            </summary>
+                                            <Card className="rounded-xl border-amber-200 bg-amber-50/70 shadow-sm dark:bg-amber-950/20">
+                                                <CardHeader className="pb-2">
+                                                    <CardTitle className="flex items-center gap-2 text-sm text-amber-900 dark:text-amber-200">
+                                                        <AlertTriangle className="size-4 shrink-0 text-amber-600" />
+                                                        <span>Detected Indicator Shortfalls &amp; Pressures ({shortfalls.length})</span>
+                                                    </CardTitle>
+                                                </CardHeader>
+                                                <CardContent className="grid gap-2 sm:grid-cols-2">
+                                                    {shortfalls.map((result) => (
+                                                        <div
+                                                            key={result.key}
+                                                            className="bg-background/90 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200/70 px-3 py-2.5 text-xs"
+                                                        >
+                                                            <span className="font-medium">{result.label}</span>
+                                                            <span className="text-muted-foreground font-mono">
+                                                                {format(result.value)} vs {format(result.benchmark)} ({result.unit})
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </CardContent>
+                                            </Card>
+                                        </details>
                                     )}
 
                                     <UnifiedIndicatorsTable results={results} />
@@ -546,13 +580,21 @@ function LocationAssessmentReport({
                             </div>
                         </section>
 
-                        <LocalLaboratoriesSection cityName={location.name} laboratories={localLaboratories} />
+                        <details className="rounded-xl border border-blue-100 bg-white p-4 dark:bg-slate-950">
+                            <summary className="cursor-pointer text-sm font-medium text-[#087dcc]">
+                                Local laboratories &amp; services ({localLaboratories.length})
+                            </summary>
+                            <div className="mt-4">
+                                <LocalLaboratoriesSection cityName={location.name} laboratories={localLaboratories} />
+                            </div>
+                        </details>
 
                         {resourceSummary && (
-                            <section className="space-y-4">
+                            <details className="space-y-4 rounded-xl border border-blue-100 bg-white p-4 dark:bg-slate-950">
+                                <summary className="cursor-pointer text-sm font-medium text-[#087dcc]">Resource &amp; agriculture summaries</summary>
                                 <ProvinceResourceOverview data={resourceSummary} />
                                 {agricultureSummary && <AgricultureSummaryView data={agricultureSummary} />}
-                            </section>
+                            </details>
                         )}
                     </div>
                 )}
@@ -560,11 +602,9 @@ function LocationAssessmentReport({
                 {/* TAB 3: Gaps & Priority Barangays (Layer C) */}
                 {activeSection === 'gaps_barangays' && (
                     <div className="flex flex-col gap-6">
+                        {aiEnabled && <AssessmentAiAnalysis state={ai.state} retry={ai.retry} mode="gaps" />}
                         {functionToolsBundle?.detected_gaps && (
-                            <DetectedGapsCard
-                                detectedGaps={functionToolsBundle.detected_gaps}
-                                cityName={location.name}
-                            />
+                            <DetectedGapsCard detectedGaps={functionToolsBundle.detected_gaps} cityName={location.name} />
                         )}
 
                         {barangayAssessment && barangayAssessment.barangays.length > 0 && (
@@ -581,10 +621,7 @@ function LocationAssessmentReport({
                 {/* TAB 4: DOST Track Record & Catalog (Layer D) */}
                 {activeSection === 'dost_catalog' && (
                     <div className="flex flex-col gap-6">
-                        <LocalDostProjectsSection
-                            cityName={location.name}
-                            data={functionToolsBundle?.local_dost_projects}
-                        />
+                        <LocalDostProjectsSection cityName={location.name} data={functionToolsBundle?.local_dost_projects} />
 
                         <DostTechnologiesCatalogSection
                             dostInterventions={dostInterventions}
@@ -595,14 +632,18 @@ function LocationAssessmentReport({
 
                 {/* TAB 5: Matched Interventions & Feasibility (Layer E) */}
                 {activeSection === 'matched_interventions' && (
-                    <LayerEInterventionsSection
-                        cityName={location.name}
-                        matchedInterventions={layerEResult?.matched_interventions ?? functionToolsBundle?.matched_interventions}
-                        suitability={layerEResult?.suitability_assessment}
-                        feasibility={layerEResult?.feasibility_assessment}
-                        partners={layerEResult?.implementation_partners}
-                        requirements={layerEResult?.requirements_estimate}
-                    />
+                    <div className="flex min-w-0 flex-col gap-6">
+                        {aiEnabled && <AssessmentAiAnalysis state={ai.state} retry={ai.retry} mode="interventions" />}
+                        <LayerEInterventionsSection
+                            diagnostics={functionToolsBundle?.detected_gaps?.sector_diagnostics}
+                            cityName={location.name}
+                            matchedInterventions={layerEResult?.matched_interventions ?? functionToolsBundle?.matched_interventions}
+                            suitability={layerEResult?.suitability_assessment}
+                            feasibility={layerEResult?.feasibility_assessment}
+                            partners={layerEResult?.implementation_partners}
+                            requirements={layerEResult?.requirements_estimate}
+                        />
+                    </div>
                 )}
 
                 <Card className="bg-muted/30">
@@ -627,102 +668,123 @@ function LocationAssessmentReport({
 }
 
 function UnifiedIndicatorsTable({ results }: { results: AssessmentResult[] }) {
+    const [sector, setSector] = useState('all');
+    const rows = results
+        .filter((row) => sector === 'all' || indicatorSector(row.dimension, row.key) === sector)
+        .toSorted((a, b) => indicatorSector(a.dimension, a.key).localeCompare(indicatorSector(b.dimension, b.key)));
     return (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
-            <table className="w-full min-w-[740px] border-collapse text-left text-sm">
-                <thead>
-                    <tr className="bg-slate-50 text-xs tracking-wider text-slate-500 uppercase dark:bg-slate-900">
-                        <th className="px-4 py-3 font-medium">Indicator &amp; Source</th>
-                        <th className="px-4 py-3 text-right font-medium">Local Rate</th>
-                        <th className="px-4 py-3 text-right font-medium">National Rate</th>
-                        <th className="w-48 px-4 py-3 font-medium">Comparison</th>
-                        <th className="px-4 py-3 font-medium">Status &amp; Notes</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {results.map((row) => {
-                        const maxVal = Math.max(row.value ?? 0, row.benchmark ?? 0, 1);
-                        const localPct = row.value !== null ? Math.min(100, Math.round((row.value / maxVal) * 100)) : 0;
-                        const benchPct = row.benchmark !== null ? Math.min(100, Math.round((row.benchmark / maxVal) * 100)) : 0;
+        <div className="min-w-0 space-y-3">
+            <SectorSelect name="Computed indicators sector" value={sector} onChange={setSector} />
+            <div
+                className="max-h-[32rem] overflow-auto rounded-xl border border-slate-200 dark:border-slate-800"
+                tabIndex={0}
+                role="region"
+                aria-label="Scrollable sector indicators"
+            >
+                <table className="w-full min-w-[740px] border-collapse text-left text-sm">
+                    <caption className="sr-only">Computed indicators grouped by sector with dynamic national comparisons</caption>
+                    <thead className="sticky top-0 z-10">
+                        <tr className="bg-slate-50 text-xs tracking-wider text-slate-500 uppercase dark:bg-slate-900">
+                            <th className="px-4 py-3 font-medium">Indicator &amp; Source</th>
+                            <th className="px-4 py-3 text-right font-medium">Local Rate</th>
+                            <th className="px-4 py-3 text-right font-medium">National Rate</th>
+                            <th className="w-48 px-4 py-3 font-medium">Comparison</th>
+                            <th className="px-4 py-3 font-medium">Status &amp; Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {rows.map((row) => {
+                            const maxVal = Math.max(row.value ?? 0, row.benchmark ?? 0, 1);
+                            const localPct = row.value !== null ? Math.min(100, Math.round((row.value / maxVal) * 100)) : 0;
+                            const benchPct = row.benchmark !== null ? Math.min(100, Math.round((row.benchmark / maxVal) * 100)) : 0;
 
-                        return (
-                            <tr key={row.key} className="align-top hover:bg-slate-50/70 dark:hover:bg-slate-900/40">
-                                <td className="px-4 py-3.5">
-                                    <div className="font-semibold text-slate-900 dark:text-slate-100">{row.label}</div>
-                                    <div className="text-muted-foreground mt-0.5 text-xs">{row.description}</div>
-                                    <div className="text-muted-foreground mt-1 text-[11px]">
-                                        Unit: <span className="font-medium">{row.unit}</span> · Source: {row.source}
-                                    </div>
-                                </td>
-                                <td className="px-4 py-3.5 text-right font-mono text-base font-semibold tabular-nums">
-                                    {row.value === null ? (
-                                        <span className="text-muted-foreground text-xs font-normal">Unavailable</span>
-                                    ) : (
-                                        format(row.value)
-                                    )}
-                                </td>
-                                <td className="px-4 py-3.5 text-right font-mono text-sm text-slate-600 tabular-nums dark:text-slate-400">
-                                    {row.benchmark === null ? (
-                                        <span className="text-muted-foreground text-xs">No reference</span>
-                                    ) : (
-                                        format(row.benchmark)
-                                    )}
-                                </td>
-                                <td className="px-4 py-3.5">
-                                    {row.value !== null && row.benchmark !== null ? (
-                                        <div className="flex flex-col gap-1.5">
-                                            <div className="flex items-center justify-between text-xs">
-                                                <span className="text-muted-foreground">Gap</span>
-                                                <span
-                                                    className={`font-mono font-semibold ${
-                                                        row.is_shortfall
-                                                            ? 'text-amber-700 dark:text-amber-400'
-                                                            : 'text-[#087dcc] dark:text-blue-300'
-                                                    }`}
-                                                >
-                                                    {row.gap !== null ? `${row.gap > 0 ? '+' : ''}${row.gap.toFixed(1)}%` : '—'}
-                                                </span>
-                                            </div>
-                                            <div className="space-y-1">
-                                                <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full" title="Local rate">
-                                                    <div
-                                                        className={`h-full rounded-full ${
-                                                            row.is_shortfall ? 'bg-amber-500' : 'bg-[#087dcc]'
-                                                        }`}
-                                                        style={{ width: `${localPct}%` }}
-                                                    />
-                                                </div>
-                                                <div className="bg-muted h-1 w-full overflow-hidden rounded-full" title="National reference rate">
-                                                    <div className="h-full rounded-full bg-slate-400" style={{ width: `${benchPct}%` }} />
-                                                </div>
-                                            </div>
+                            return (
+                                <tr key={row.key} className="align-top hover:bg-slate-50/70 dark:hover:bg-slate-900/40">
+                                    <td className="px-4 py-3.5">
+                                        <div className="font-semibold text-slate-900 dark:text-slate-100">{row.label}</div>
+                                        <div className="text-muted-foreground mt-0.5 text-[11px] capitalize">
+                                            {indicatorSector(row.dimension, row.key).replaceAll('_', ' ')}
                                         </div>
-                                    ) : (
-                                        <span className="text-muted-foreground text-xs">—</span>
-                                    )}
-                                </td>
-                                <td className="max-w-xs px-4 py-3.5">
-                                    <StatusBadge result={row} />
-                                    {row.reason && (
-                                        <p className="text-muted-foreground mt-1.5 text-xs leading-relaxed">{row.reason}</p>
-                                    )}
+                                        <details className="text-muted-foreground mt-1 text-[11px]">
+                                            <summary className="cursor-pointer text-[#087dcc]">Definition &amp; source</summary>
+                                            <p className="my-1">{row.description}</p>
+                                            Unit: <span className="font-medium">{row.unit}</span> · Source: {row.source}
+                                            {row.caveat && <p className="mt-1">{row.caveat}</p>}
+                                            {row.basis_note && <p className="mt-1">{row.basis_note}</p>}
+                                        </details>
+                                    </td>
+                                    <td className="px-4 py-3.5 text-right font-mono text-base font-semibold tabular-nums">
+                                        {row.value === null ? (
+                                            <span className="text-muted-foreground text-xs font-normal">Unavailable</span>
+                                        ) : (
+                                            format(row.value)
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3.5 text-right font-mono text-sm text-slate-600 tabular-nums dark:text-slate-400">
+                                        {row.benchmark === null ? (
+                                            <span className="text-muted-foreground text-xs">No reference</span>
+                                        ) : (
+                                            format(row.benchmark)
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3.5">
+                                        {row.value !== null && row.benchmark !== null ? (
+                                            <div className="flex flex-col gap-1.5">
+                                                <div className="flex items-center justify-between text-xs">
+                                                    <span className="text-muted-foreground">Gap</span>
+                                                    <span
+                                                        className={`font-mono font-semibold ${
+                                                            row.is_shortfall
+                                                                ? 'text-amber-700 dark:text-amber-400'
+                                                                : 'text-[#087dcc] dark:text-blue-300'
+                                                        }`}
+                                                    >
+                                                        {row.gap !== null ? `${row.gap > 0 ? '+' : ''}${row.gap.toFixed(1)}%` : '—'}
+                                                    </span>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full" title="Local rate">
+                                                        <div
+                                                            className={`h-full rounded-full ${row.is_shortfall ? 'bg-amber-500' : 'bg-[#087dcc]'}`}
+                                                            style={{ width: `${localPct}%` }}
+                                                        />
+                                                    </div>
+                                                    <div className="bg-muted h-1 w-full overflow-hidden rounded-full" title="National reference rate">
+                                                        <div className="h-full rounded-full bg-slate-400" style={{ width: `${benchPct}%` }} />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <span className="text-muted-foreground text-xs">—</span>
+                                        )}
+                                    </td>
+                                    <td className="max-w-xs px-4 py-3.5">
+                                        <StatusBadge result={row} />
+                                        {row.reason && (
+                                            <details className="text-muted-foreground mt-1.5 text-xs leading-relaxed">
+                                                <summary className="cursor-pointer">Comparison notes</summary>
+                                                {row.reason}
+                                            </details>
+                                        )}
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                        {rows.length === 0 && (
+                            <tr>
+                                <td colSpan={5} className="text-muted-foreground p-5 text-sm">
+                                    No measured indicators for this sector. Review available inventories and data limitations.
                                 </td>
                             </tr>
-                        );
-                    })}
-                </tbody>
-            </table>
+                        )}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 }
 
-function LocationOverviewBar({
-    location,
-    populationYear,
-}: {
-    location: AssessmentPageProps['location'];
-    populationYear: number | null;
-}) {
+function LocationOverviewBar({ location, populationYear }: { location: AssessmentPageProps['location']; populationYear: number | null }) {
     const populationLabel = populationYear === null ? 'Population' : `Population (${populationYear})`;
     const popStats = location.population_statistics;
     const brgyCounts = location.barangay_counts;
@@ -831,7 +893,9 @@ function BarangayPrioritySection({
 }) {
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState<'all' | 'high' | 'zero_facilities' | 'urban' | 'rural'>('all');
-    const [sortBy, setSortBy] = useState<'priority_score_desc' | 'population_desc' | 'population_asc' | 'density_desc' | 'name_asc'>('priority_score_desc');
+    const [sortBy, setSortBy] = useState<'priority_score_desc' | 'population_desc' | 'population_asc' | 'density_desc' | 'name_asc'>(
+        'priority_score_desc',
+    );
     const [visibleLimit, setVisibleLimit] = useState(20);
 
     const maxShare = useMemo(() => Math.max(...barangays.map((b) => b.population_share ?? 0), 1), [barangays]);
@@ -953,7 +1017,7 @@ function BarangayPrioritySection({
             </div>
 
             <Card>
-                <CardHeader className="flex flex-col gap-4 pb-4 sm:flex-row sm:items-center sm:justify-between">
+                <CardHeader className="flex flex-col flex-wrap gap-4 pb-4 xl:flex-row xl:items-center xl:justify-between">
                     <div className="flex flex-wrap items-center gap-2">
                         <Button type="button" size="sm" variant={filter === 'all' ? 'default' : 'outline'} onClick={() => setFilter('all')}>
                             All ({barangays.length})
@@ -981,8 +1045,8 @@ function BarangayPrioritySection({
                         )}
                     </div>
 
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <div className="relative w-full sm:w-56">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <div className="relative w-full min-w-0 sm:w-56">
                             <Search className="text-muted-foreground pointer-events-none absolute top-2.5 left-2.5 size-4" />
                             <Input
                                 type="search"
@@ -997,7 +1061,7 @@ function BarangayPrioritySection({
                             aria-label="Sort barangays"
                             value={sortBy}
                             onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-                            className="border-input focus-visible:ring-ring h-9 rounded-md border bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2"
+                            className="border-input focus-visible:ring-ring h-9 max-w-full rounded-md border bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2"
                         >
                             <option value="priority_score_desc">Sort: Priority Score (High → Low)</option>
                             <option value="population_desc">Sort: Population (High → Low)</option>
@@ -1238,13 +1302,7 @@ function LocalLaboratoriesSection({ cityName, laboratories }: { cityName: string
     );
 }
 
-function DatasetAuditSection({
-    cityName,
-    audit,
-}: {
-    cityName: string;
-    audit: NonNullable<FunctionToolsBundle['dataset_audit']>;
-}) {
+function DatasetAuditSection({ cityName, audit }: { cityName: string; audit: NonNullable<FunctionToolsBundle['dataset_audit']> }) {
     const datasets = Object.values(audit.datasets);
 
     return (
@@ -1311,13 +1369,7 @@ function DatasetAuditSection({
     );
 }
 
-function LocalDostProjectsSection({
-    cityName,
-    data,
-}: {
-    cityName: string;
-    data?: any;
-}) {
+function LocalDostProjectsSection({ cityName, data }: { cityName: string; data?: any }) {
     if (!data) {
         return (
             <Card>
@@ -1443,9 +1495,7 @@ function LayerAAssetsSummary({
                             <Building2 className="size-3.5 text-emerald-600" />
                             Health Facilities
                         </span>
-                        <span className="text-2xl font-bold tabular-nums text-slate-900 dark:text-white">
-                            {healthCount ?? '—'}
-                        </span>
+                        <span className="text-2xl font-bold text-slate-900 tabular-nums dark:text-white">{healthCount ?? '—'}</span>
                         <span className="text-muted-foreground text-[10px]">Hospitals, RHUs &amp; BHS</span>
                     </CardContent>
                 </Card>
@@ -1456,9 +1506,7 @@ function LayerAAssetsSummary({
                             <Building2 className="size-3.5 text-[#087dcc]" />
                             Schools &amp; Learning
                         </span>
-                        <span className="text-2xl font-bold tabular-nums text-slate-900 dark:text-white">
-                            {schoolCount ?? '—'}
-                        </span>
+                        <span className="text-2xl font-bold text-slate-900 tabular-nums dark:text-white">{schoolCount ?? '—'}</span>
                         <span className="text-muted-foreground text-[10px]">DepEd &amp; HEI campuses</span>
                     </CardContent>
                 </Card>
@@ -1469,9 +1517,7 @@ function LayerAAssetsSummary({
                             <ShieldCheck className="size-3.5 text-red-600" />
                             Safety &amp; DRRM
                         </span>
-                        <span className="text-2xl font-bold tabular-nums text-slate-900 dark:text-white">
-                            {safetyCount ?? '—'}
-                        </span>
+                        <span className="text-2xl font-bold text-slate-900 tabular-nums dark:text-white">{safetyCount ?? '—'}</span>
                         <span className="text-muted-foreground text-[10px]">Police, Fire &amp; Rescue</span>
                     </CardContent>
                 </Card>
@@ -1482,9 +1528,7 @@ function LayerAAssetsSummary({
                             <Radio className="size-3.5 text-orange-600" />
                             Telecom Towers
                         </span>
-                        <span className="text-2xl font-bold tabular-nums text-slate-900 dark:text-white">
-                            {telecomCount ?? '—'}
-                        </span>
+                        <span className="text-2xl font-bold text-slate-900 tabular-nums dark:text-white">{telecomCount ?? '—'}</span>
                         <span className="text-muted-foreground text-[10px]">Cellular &amp; Tower sites</span>
                     </CardContent>
                 </Card>
@@ -1495,9 +1539,7 @@ function LayerAAssetsSummary({
                             <Navigation className="size-3.5 text-teal-600" />
                             Road Segments
                         </span>
-                        <span className="text-2xl font-bold tabular-nums text-slate-900 dark:text-white">
-                            {roadCount?.toLocaleString() ?? '—'}
-                        </span>
+                        <span className="text-2xl font-bold text-slate-900 tabular-nums dark:text-white">{roadCount?.toLocaleString() ?? '—'}</span>
                         <span className="text-muted-foreground text-[10px]">Mapped road network</span>
                     </CardContent>
                 </Card>
@@ -1511,33 +1553,37 @@ function LayerAAssetsSummary({
                             Multi-Year Demographic Profile (2020 Baseline vs 2024 Census)
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="grid gap-4 sm:grid-cols-4 text-xs">
+                    <CardContent className="grid gap-4 text-xs sm:grid-cols-4">
                         <div>
-                            <span className="text-muted-foreground text-[11px] uppercase tracking-wider">Current Population (2024)</span>
-                            <div className="text-base font-bold font-mono text-slate-900 dark:text-slate-100">
+                            <span className="text-muted-foreground text-[11px] tracking-wider uppercase">Current Population (2024)</span>
+                            <div className="font-mono text-base font-bold text-slate-900 dark:text-slate-100">
                                 {popStats.population_current?.toLocaleString() ?? '—'}
                             </div>
                             <span className="text-muted-foreground text-[10px]">Active Census benchmark</span>
                         </div>
                         <div>
-                            <span className="text-muted-foreground text-[11px] uppercase tracking-wider">Baseline Population (2020)</span>
-                            <div className="text-base font-bold font-mono text-slate-900 dark:text-slate-100">
+                            <span className="text-muted-foreground text-[11px] tracking-wider uppercase">Baseline Population (2020)</span>
+                            <div className="font-mono text-base font-bold text-slate-900 dark:text-slate-100">
                                 {popStats.population_baseline?.toLocaleString() ?? '—'}
                             </div>
                             <span className="text-muted-foreground text-[10px]">PSA 2020 Census figure</span>
                         </div>
                         <div>
-                            <span className="text-muted-foreground text-[11px] uppercase tracking-wider">Population Change &amp; CAGR</span>
-                            <div className="text-base font-bold font-mono text-emerald-700 dark:text-emerald-400">
-                                {popStats.growth_rate_pct !== null ? `${popStats.growth_rate_pct > 0 ? '+' : ''}${popStats.growth_rate_pct.toFixed(2)}%` : '—'}
+                            <span className="text-muted-foreground text-[11px] tracking-wider uppercase">Population Change &amp; CAGR</span>
+                            <div className="font-mono text-base font-bold text-emerald-700 dark:text-emerald-400">
+                                {popStats.growth_rate_pct !== null
+                                    ? `${popStats.growth_rate_pct > 0 ? '+' : ''}${popStats.growth_rate_pct.toFixed(2)}%`
+                                    : '—'}
                             </div>
                             <span className="text-muted-foreground text-[10px]">
-                                {popStats.annual_growth_rate_pct !== null ? `${popStats.annual_growth_rate_pct.toFixed(2)}% annual CAGR` : 'Annualized rate'}
+                                {popStats.annual_growth_rate_pct !== null
+                                    ? `${popStats.annual_growth_rate_pct.toFixed(2)}% annual CAGR`
+                                    : 'Annualized rate'}
                             </span>
                         </div>
                         <div>
-                            <span className="text-muted-foreground text-[11px] uppercase tracking-wider">Density &amp; Classification</span>
-                            <div className="text-base font-bold font-mono text-slate-900 dark:text-slate-100">
+                            <span className="text-muted-foreground text-[11px] tracking-wider uppercase">Density &amp; Classification</span>
+                            <div className="font-mono text-base font-bold text-slate-900 dark:text-slate-100">
                                 {location.area_km2 && popStats.population_current
                                     ? `${Math.round(popStats.population_current / location.area_km2).toLocaleString()} / km²`
                                     : '—'}
@@ -1557,11 +1603,7 @@ function LayerAAssetsSummary({
 /* Layer B: Road Accessibility Component                                      */
 /* -------------------------------------------------------------------------- */
 
-function RoadAccessibilityCard({
-    roadAccessibility,
-}: {
-    roadAccessibility?: any;
-}) {
+function RoadAccessibilityCard({ roadAccessibility }: { roadAccessibility?: any }) {
     if (!roadAccessibility) {
         return (
             <Card className="border-blue-100 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
@@ -1576,9 +1618,7 @@ function RoadAccessibilityCard({
                         </Badge>
                     </div>
                 </CardHeader>
-                <CardContent className="p-4 text-xs text-muted-foreground">
-                    Road accessibility analysis data is not available.
-                </CardContent>
+                <CardContent className="text-muted-foreground p-4 text-xs">Road accessibility analysis data is not available.</CardContent>
             </Card>
         );
     }
@@ -1590,9 +1630,7 @@ function RoadAccessibilityCard({
     const coverage = roadAccessibility?.barangay_coverage;
     const reason = roadAccessibility?.reason;
 
-    const bySurface: any[] = Array.isArray(roadAccessibility?.by_surface_type)
-        ? roadAccessibility.by_surface_type
-        : [];
+    const bySurface: any[] = Array.isArray(roadAccessibility?.by_surface_type) ? roadAccessibility.by_surface_type : [];
 
     const pavedSegments = bySurface
         .filter((s: any) => ['concrete', 'asphalt', 'paved'].includes(String(s.surface_type || '').toLowerCase()))
@@ -1618,28 +1656,24 @@ function RoadAccessibilityCard({
                 {totalSegments === 0 ? (
                     <div className="rounded-lg bg-amber-50 p-3 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
                         <p className="font-medium">0 Road Segments Recorded</p>
-                        <p className="text-[11px] mt-1 opacity-90">
+                        <p className="mt-1 text-[11px] opacity-90">
                             {reason || 'No road network segments recorded for this locality in the database.'}
                         </p>
                     </div>
                 ) : (
                     <>
-                        <div className="grid grid-cols-3 gap-3 text-center border-b pb-3 dark:border-slate-800">
+                        <div className="grid grid-cols-3 gap-3 border-b pb-3 text-center dark:border-slate-800">
                             <div>
                                 <div className="text-muted-foreground text-[10px] uppercase">Total Segments</div>
-                                <div className="text-base font-bold font-mono text-slate-900 dark:text-white">
-                                    {totalSegments.toLocaleString()}
-                                </div>
+                                <div className="font-mono text-base font-bold text-slate-900 dark:text-white">{totalSegments.toLocaleString()}</div>
                             </div>
                             <div>
                                 <div className="text-muted-foreground text-[10px] uppercase">Network Length</div>
-                                <div className="text-base font-bold font-mono text-slate-900 dark:text-white">
-                                    {totalKm.toFixed(1)} km
-                                </div>
+                                <div className="font-mono text-base font-bold text-slate-900 dark:text-white">{totalKm.toFixed(1)} km</div>
                             </div>
                             <div>
                                 <div className="text-muted-foreground text-[10px] uppercase">Road Density</div>
-                                <div className="text-base font-bold font-mono text-slate-900 dark:text-white">
+                                <div className="font-mono text-base font-bold text-slate-900 dark:text-white">
                                     {roadDensity !== null ? `${Number(roadDensity).toFixed(2)} km/km²` : '—'}
                                 </div>
                             </div>
@@ -1651,11 +1685,8 @@ function RoadAccessibilityCard({
                                 <span className="text-teal-700 dark:text-teal-400">Paved (Concrete/Asphalt): {pavedPct}%</span>
                                 <span className="text-amber-700 dark:text-amber-400">Unpaved (Gravel/Earth): {unpavedPct}%</span>
                             </div>
-                            <div className="bg-amber-200 h-2 w-full overflow-hidden rounded-full dark:bg-amber-900/40">
-                                <div
-                                    className="bg-teal-600 h-full rounded-full transition-all"
-                                    style={{ width: `${pavedPct}%` }}
-                                />
+                            <div className="h-2 w-full overflow-hidden rounded-full bg-amber-200 dark:bg-amber-900/40">
+                                <div className="h-full rounded-full bg-teal-600 transition-all" style={{ width: `${pavedPct}%` }} />
                             </div>
                             <p className="text-muted-foreground text-[10px]">
                                 {pavedPct >= 50
@@ -1677,8 +1708,9 @@ function RoadAccessibilityCard({
 
                         {/* Barangay Coverage if available */}
                         {coverage && (
-                            <div className="border-t pt-2 text-[11px] text-muted-foreground dark:border-slate-800">
-                                Barangay Accessibility: <strong className="text-slate-800 dark:text-slate-200">{coverage.coverage_pct ?? 0}%</strong> ({coverage.barangays_with_roads ?? 0} of {coverage.total_barangays ?? 0} barangays with road access)
+                            <div className="text-muted-foreground border-t pt-2 text-[11px] dark:border-slate-800">
+                                Barangay Accessibility: <strong className="text-slate-800 dark:text-slate-200">{coverage.coverage_pct ?? 0}%</strong>{' '}
+                                ({coverage.barangays_with_roads ?? 0} of {coverage.total_barangays ?? 0} barangays with road access)
                             </div>
                         )}
                     </>
@@ -1692,11 +1724,7 @@ function RoadAccessibilityCard({
 /* Layer B: Telecom Connectivity Component                                    */
 /* -------------------------------------------------------------------------- */
 
-function TelecomConnectivityCard({
-    telecom,
-}: {
-    telecom?: any;
-}) {
+function TelecomConnectivityCard({ telecom }: { telecom?: any }) {
     if (!telecom) {
         return (
             <Card className="border-blue-100 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
@@ -1711,9 +1739,7 @@ function TelecomConnectivityCard({
                         </Badge>
                     </div>
                 </CardHeader>
-                <CardContent className="p-4 text-xs text-muted-foreground">
-                    Telecom connectivity analysis data is not available.
-                </CardContent>
+                <CardContent className="text-muted-foreground p-4 text-xs">Telecom connectivity analysis data is not available.</CardContent>
             </Card>
         );
     }
@@ -1728,8 +1754,8 @@ function TelecomConnectivityCard({
     const operators: string[] = Array.isArray(byOp)
         ? byOp.map((o: any) => (typeof o === 'string' ? o : `${o.name || o.operator} (${o.count || 1})`))
         : typeof byOp === 'object' && byOp !== null
-        ? Object.entries(byOp).map(([k, v]) => `${k} (${v})`)
-        : [];
+          ? Object.entries(byOp).map(([k, v]) => `${k} (${v})`)
+          : [];
 
     return (
         <Card className="border-blue-100 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
@@ -1748,9 +1774,7 @@ function TelecomConnectivityCard({
                 <div className="grid grid-cols-2 gap-3 border-b pb-3 dark:border-slate-800">
                     <div>
                         <div className="text-muted-foreground text-[10px] uppercase">Recorded Cell Sites</div>
-                        <div className="text-lg font-bold font-mono text-slate-900 dark:text-white">
-                            {sitesCount} tower(s)
-                        </div>
+                        <div className="font-mono text-lg font-bold text-slate-900 dark:text-white">{sitesCount} tower(s)</div>
                     </div>
                     <div>
                         <div className="text-muted-foreground text-[10px] uppercase">5G Network Deployment</div>
@@ -1764,7 +1788,7 @@ function TelecomConnectivityCard({
 
                 {operators.length > 0 && (
                     <div>
-                        <div className="text-muted-foreground text-[11px] font-medium mb-1.5">Tower Operators &amp; Carriers:</div>
+                        <div className="text-muted-foreground mb-1.5 text-[11px] font-medium">Tower Operators &amp; Carriers:</div>
                         <div className="flex flex-wrap gap-1.5">
                             {operators.map((op, idx) => (
                                 <Badge key={idx} variant="outline" className="text-[10px]">
@@ -1789,104 +1813,7 @@ function TelecomConnectivityCard({
 /* Layer C: Detected Development Gaps Component                               */
 /* -------------------------------------------------------------------------- */
 
-function DetectedGapsCard({
-    detectedGaps,
-    cityName,
-}: {
-    detectedGaps: NonNullable<FunctionToolsBundle['detected_gaps']>;
-    cityName: string;
-}) {
-    const gaps = detectedGaps.gaps ?? [];
-    const criticalCount = detectedGaps.critical_gaps_count ?? detectedGaps.critical_severity_count ?? 0;
-
-    return (
-        <section className="flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="font-mono text-xs">
-                        Layer C · detect_development_gaps
-                    </Badge>
-                    <h2 className="text-lg font-semibold tracking-tight text-[#087dcc] dark:text-blue-200">
-                        Identified Development Gaps &amp; Shortfalls ({detectedGaps.total_gaps_detected})
-                    </h2>
-                </div>
-                {criticalCount > 0 && (
-                    <Badge variant="destructive" className="text-xs">
-                        {criticalCount} Critical Severity
-                    </Badge>
-                )}
-            </div>
-
-            {gaps.length === 0 ? (
-                <Card>
-                    <CardContent className="p-6 text-sm text-muted-foreground">
-                        No critical development gaps currently detected below national benchmarks for {cityName}.
-                    </CardContent>
-                </Card>
-            ) : (
-                <div className="grid gap-3 sm:grid-cols-2">
-                    {gaps.map((gap: any, idx: number) => {
-                        const severity = gap.severity_score ?? 50;
-                        const level = String(gap.severity_level ?? 'moderate').toLowerCase();
-
-                        return (
-                            <Card key={idx} className="border-amber-200/80 bg-white shadow-xs dark:border-amber-900/40 dark:bg-slate-900">
-                                <CardHeader className="pb-2">
-                                    <div className="flex items-start justify-between gap-2">
-                                        <div className="font-medium text-sm text-slate-900 dark:text-slate-100">
-                                            {gap.label ?? gap.indicator_key ?? 'Development Deficit'}
-                                        </div>
-                                        <Badge
-                                            className={
-                                                level === 'critical'
-                                                    ? 'bg-red-600'
-                                                    : level === 'high'
-                                                    ? 'bg-amber-600'
-                                                    : 'bg-[#087dcc]'
-                                            }
-                                        >
-                                            {severity}% Severity
-                                        </Badge>
-                                    </div>
-                                    <span className="text-muted-foreground text-[11px] capitalize">
-                                        Domain: {gap.dimension ?? 'General'} · Type: {gap.gap_type?.replace('_', ' ') ?? 'Shortfall'}
-                                    </span>
-                                </CardHeader>
-                                <CardContent className="flex flex-col gap-2 text-xs">
-                                    <div className="flex justify-between items-center font-mono border-t pt-2 dark:border-slate-800">
-                                        <span className="text-muted-foreground">Measured vs Benchmark:</span>
-                                        <span className="font-semibold text-slate-900 dark:text-slate-100">
-                                            {format(gap.measured_value)} vs {format(gap.benchmark_value)} {gap.unit}
-                                        </span>
-                                    </div>
-
-                                    {gap.percentage_gap !== null && (
-                                        <div className="flex justify-between items-center text-muted-foreground">
-                                            <span>Percentage Gap:</span>
-                                            <span className="font-mono text-amber-700 font-semibold dark:text-amber-400">
-                                                {gap.percentage_gap > 0 ? '+' : ''}{gap.percentage_gap}%
-                                            </span>
-                                        </div>
-                                    )}
-
-                                    {gap.affected_population && (
-                                        <div className="text-muted-foreground text-[11px]">
-                                            Estimated affected population: <span className="font-semibold">{gap.affected_population.toLocaleString()}</span> residents
-                                        </div>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        );
-                    })}
-                </div>
-            )}
-        </section>
-    );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Layer D: Searchable DOST Technologies Catalog Component                    */
-/* -------------------------------------------------------------------------- */
+const DetectedGapsCard = GapSectorTable;
 
 function DostTechnologiesCatalogSection({
     dostInterventions,
@@ -1897,11 +1824,12 @@ function DostTechnologiesCatalogSection({
 }) {
     const [search, setSearch] = useState('');
 
-    const rawList: any[] = (Array.isArray(dostInterventions) && dostInterventions.length > 0)
-        ? dostInterventions
-        : (Array.isArray(catalogTechnologies) && catalogTechnologies.length > 0)
-        ? catalogTechnologies
-        : [];
+    const rawList: any[] =
+        Array.isArray(dostInterventions) && dostInterventions.length > 0
+            ? dostInterventions
+            : Array.isArray(catalogTechnologies) && catalogTechnologies.length > 0
+              ? catalogTechnologies
+              : [];
 
     const filtered = rawList.filter((tech: any) => {
         if (!search.trim()) return true;
@@ -1910,12 +1838,7 @@ function DostTechnologiesCatalogSection({
         const agency = String(tech.agency || '').toLowerCase();
         const sector = String(tech.sector || '').toLowerCase();
         const mechanism = String(tech.mechanism || tech.description || tech.outcome || '').toLowerCase();
-        return (
-            name.includes(q) ||
-            agency.includes(q) ||
-            sector.includes(q) ||
-            mechanism.includes(q)
-        );
+        return name.includes(q) || agency.includes(q) || sector.includes(q) || mechanism.includes(q);
     });
 
     return (
@@ -1930,7 +1853,7 @@ function DostTechnologiesCatalogSection({
                     </h2>
                 </div>
                 <div className="relative w-full sm:w-64">
-                    <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
+                    <Search className="text-muted-foreground absolute top-2.5 left-2.5 size-3.5" />
                     <Input
                         placeholder="Search technology, sector, agency…"
                         value={search}
@@ -1942,7 +1865,7 @@ function DostTechnologiesCatalogSection({
 
             {filtered.length === 0 ? (
                 <Card>
-                    <CardContent className="p-6 text-sm text-muted-foreground text-center">
+                    <CardContent className="text-muted-foreground p-6 text-center text-sm">
                         {search.trim()
                             ? `No DOST technologies match "${search}". Try searching another keyword or agency.`
                             : 'No specific DOST technologies catalog entries mapped to this locality yet.'}
@@ -1954,14 +1877,12 @@ function DostTechnologiesCatalogSection({
                         <Card key={item.id ?? idx} className="border-blue-100 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
                             <CardHeader className="pb-2">
                                 <div className="flex items-start justify-between gap-2">
-                                    <div className="font-semibold text-sm text-slate-900 dark:text-slate-100">
-                                        {item.name || 'DOST Technology'}
-                                    </div>
+                                    <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{item.name || 'DOST Technology'}</div>
                                     <Badge variant="outline" className="text-[10px]">
                                         {item.agency || 'DOST'}
                                     </Badge>
                                 </div>
-                                {item.code && <div className="text-muted-foreground text-[11px] font-mono">{item.code}</div>}
+                                {item.code && <div className="text-muted-foreground font-mono text-[11px]">{item.code}</div>}
                             </CardHeader>
                             <CardContent className="flex flex-col gap-2 text-xs">
                                 {item.sector && (
@@ -1969,7 +1890,7 @@ function DostTechnologiesCatalogSection({
                                         {item.sector}
                                     </Badge>
                                 )}
-                                <p className="text-muted-foreground text-[11px] leading-relaxed line-clamp-3">
+                                <p className="text-muted-foreground line-clamp-3 text-[11px] leading-relaxed">
                                     {item.mechanism || item.outcome || item.description || 'Verified DOST scientific program package.'}
                                 </p>
                             </CardContent>
@@ -1985,431 +1906,4 @@ function DostTechnologiesCatalogSection({
 /* Layer E: Matched Interventions, Feasibility & Suitability Component         */
 /* -------------------------------------------------------------------------- */
 
-function LayerEInterventionsSection({
-    cityName,
-    matchedInterventions,
-    suitability,
-    feasibility,
-    partners,
-    requirements,
-}: {
-    cityName: string;
-    matchedInterventions?: any;
-    suitability?: any;
-    feasibility?: any;
-    partners?: any;
-    requirements?: any;
-}) {
-    const gapsMatches: any[] = matchedInterventions?.gap_interventions ?? [];
-    const [viewMode, setViewMode] = useState<'consolidated' | 'by_gap'>('consolidated');
-
-    // Consolidate interventions across all gaps to eliminate duplicate cards
-    const uniqueInterventions = useMemo(() => {
-        const map = new Map<string, {
-            name: string;
-            agency: string;
-            availability_status: string;
-            relevance_score: number;
-            matching_criteria: string[];
-            intended_beneficiaries: string;
-            description?: string;
-            addressed_gaps: { gap_name: string; domain: string; severity: number }[];
-        }>();
-
-        for (const gm of gapsMatches) {
-            const gapInfo = {
-                gap_name: gm.gap_name || 'Identified Gap',
-                domain: gm.domain || 'General',
-                severity: gm.severity ?? 50,
-            };
-
-            const inters = gm.matched_interventions ?? [];
-            for (const mi of inters) {
-                const key = String(mi.name || '').trim().toLowerCase();
-                if (!key) continue;
-
-                if (!map.has(key)) {
-                    map.set(key, {
-                        name: mi.name,
-                        agency: mi.agency || 'DOST',
-                        availability_status: mi.availability_status || 'available',
-                        relevance_score: Number(mi.relevance_score ?? 75),
-                        matching_criteria: Array.isArray(mi.matching_criteria) ? [...mi.matching_criteria] : [],
-                        intended_beneficiaries: mi.intended_beneficiaries || 'Target local beneficiaries',
-                        description: mi.description,
-                        addressed_gaps: [gapInfo],
-                    });
-                } else {
-                    const existing = map.get(key)!;
-                    if (!existing.addressed_gaps.some((g) => g.gap_name === gapInfo.gap_name)) {
-                        existing.addressed_gaps.push(gapInfo);
-                    }
-                    if (Number(mi.relevance_score ?? 0) > existing.relevance_score) {
-                        existing.relevance_score = Number(mi.relevance_score);
-                    }
-                    if (Array.isArray(mi.matching_criteria)) {
-                        for (const crit of mi.matching_criteria) {
-                            if (!existing.matching_criteria.includes(crit)) {
-                                existing.matching_criteria.push(crit);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        return Array.from(map.values()).sort((a, b) => b.relevance_score - a.relevance_score);
-    }, [gapsMatches]);
-
-    return (
-        <div className="flex flex-col gap-6">
-            {/* Header */}
-            <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="font-mono text-xs">
-                        Layer E · match_dost_interventions &amp; assess_feasibility
-                    </Badge>
-                    <h2 className="text-xl font-bold tracking-tight text-[#087dcc] dark:text-blue-200">
-                        Deterministic STI Intervention Matching &amp; Feasibility Evaluation
-                    </h2>
-                </div>
-                <p className="text-muted-foreground text-sm">
-                    Evidence-backed technology matching for {cityName} mapped directly to identified development shortfalls, local resource readiness, and verified program availability.
-                </p>
-            </div>
-
-            {/* Feasibility & Suitability Status Banner */}
-            {feasibility && suitability && (
-                <div className="grid gap-4 md:grid-cols-2">
-                    {/* Implementation Feasibility Card */}
-                    <Card className="border-blue-100 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
-                        <CardHeader className="pb-2">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <CheckCircle2 className="size-4 text-emerald-600" />
-                                    <CardTitle className="text-sm font-semibold">Implementation Feasibility Assessment</CardTitle>
-                                </div>
-                                <Badge
-                                    className={
-                                        feasibility.feasibility_status === 'feasible'
-                                            ? 'bg-emerald-600'
-                                            : feasibility.feasibility_status === 'conditionally_feasible'
-                                            ? 'bg-amber-600'
-                                            : 'bg-red-600'
-                                    }
-                                >
-                                    {feasibility.feasibility_status?.replace('_', ' ').toUpperCase()}
-                                </Badge>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="flex flex-col gap-3 text-xs">
-                            <p className="text-muted-foreground">{feasibility.feasibility_summary}</p>
-
-                            {/* Verified Prerequisites Checklist */}
-                            {feasibility.verified_prerequisites && (
-                                <div className="flex flex-col gap-1.5 border-t pt-2 dark:border-slate-800">
-                                    <span className="font-medium text-slate-800 dark:text-slate-200 text-[11px]">Prerequisite Verification:</span>
-                                    {feasibility.verified_prerequisites.slice(0, 4).map((p: any, idx: number) => (
-                                        <div key={idx} className="flex items-center justify-between gap-2 text-[11px]">
-                                            <span className="text-muted-foreground truncate">{p.prerequisite}</span>
-                                            <Badge variant={p.status === 'passed' ? 'default' : 'outline'} className={p.status === 'passed' ? 'bg-emerald-600 text-[10px]' : 'text-[10px]'}>
-                                                {p.status}
-                                            </Badge>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    {/* Suitability 5-Dimension Radar Card */}
-                    <Card className="border-blue-100 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
-                        <CardHeader className="pb-2">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <Sparkles className="size-4 text-[#087dcc]" />
-                                    <CardTitle className="text-sm font-semibold">Suitability Score: {suitability.suitability_score ?? 75}/100</CardTitle>
-                                </div>
-                                <Badge variant="secondary" className="capitalize">
-                                    {suitability.suitability_level?.replace('_', ' ')}
-                                </Badge>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="flex flex-col gap-2.5 text-xs">
-                            {suitability.dimension_scores && (
-                                <div className="flex flex-col gap-1.5">
-                                    {Object.entries(suitability.dimension_scores).map(([dim, score]: [string, any]) => (
-                                        <div key={dim} className="flex flex-col gap-0.5">
-                                            <div className="flex justify-between text-[10px] text-muted-foreground capitalize">
-                                                <span>{dim.replace('_', ' ')}</span>
-                                                <span className="font-mono font-semibold">{score}%</span>
-                                            </div>
-                                            <div className="bg-muted h-1 w-full overflow-hidden rounded-full">
-                                                <div className="bg-[#087dcc] h-full rounded-full" style={{ width: `${score}%` }} />
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            {suitability.enablers && suitability.enablers.length > 0 && (
-                                <div className="border-t pt-2 dark:border-slate-800">
-                                    <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">Key Enabler:</span>
-                                    <p className="text-muted-foreground text-[11px] line-clamp-1">{suitability.enablers[0]}</p>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
-
-            {/* Matched Interventions Section with View Mode Switcher */}
-            <div className="flex flex-col gap-4">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">
-                            Matched DOST STI Programs &amp; Interventions
-                        </h3>
-                        <p className="text-xs text-muted-foreground">
-                            {uniqueInterventions.length} distinct technologies mapped across {gapsMatches.length} identified development gaps.
-                        </p>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900">
-                        <button
-                            type="button"
-                            onClick={() => setViewMode('consolidated')}
-                            className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
-                                viewMode === 'consolidated'
-                                    ? 'bg-[#087dcc] text-white shadow-xs'
-                                    : 'text-muted-foreground hover:text-slate-900 dark:hover:text-slate-100'
-                            }`}
-                        >
-                            Unique Interventions ({uniqueInterventions.length})
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setViewMode('by_gap')}
-                            className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
-                                viewMode === 'by_gap'
-                                    ? 'bg-[#087dcc] text-white shadow-xs'
-                                    : 'text-muted-foreground hover:text-slate-900 dark:hover:text-slate-100'
-                            }`}
-                        >
-                            By Specific Gap ({gapsMatches.length})
-                        </button>
-                    </div>
-                </div>
-
-                {/* VIEW 1: Consolidated Unique Interventions (Default - Zero Duplicate Cards) */}
-                {viewMode === 'consolidated' && (
-                    <div className="flex flex-col gap-3">
-                        {uniqueInterventions.length === 0 ? (
-                            <Card>
-                                <CardContent className="p-6 text-sm text-muted-foreground text-center">
-                                    No specific DOST catalog interventions currently matched to identified gaps.
-                                </CardContent>
-                            </Card>
-                        ) : (
-                            <div className="grid gap-3 sm:grid-cols-2">
-                                {uniqueInterventions.map((item, idx) => (
-                                    <div
-                                        key={idx}
-                                        className="flex flex-col gap-2.5 rounded-xl border border-blue-100 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900"
-                                    >
-                                        <div className="flex items-start justify-between gap-2">
-                                            <div>
-                                                <div className="font-semibold text-sm text-slate-900 dark:text-slate-100">
-                                                    {item.name}
-                                                </div>
-                                                <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
-                                                    <span>Agency: <strong>{item.agency}</strong></span>
-                                                    <span>·</span>
-                                                    <span>Status: <strong className="capitalize">{item.availability_status.replace('_', ' ')}</strong></span>
-                                                </div>
-                                            </div>
-                                            <Badge className="bg-[#087dcc] shrink-0 text-[10px]">
-                                                {item.relevance_score}% Relevance
-                                            </Badge>
-                                        </div>
-
-                                        {/* Addressed Municipal Gaps Pills */}
-                                        <div className="flex flex-col gap-1 border-t pt-2 dark:border-slate-800">
-                                            <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-300">
-                                                Addressed Municipal Gaps ({item.addressed_gaps.length}):
-                                            </span>
-                                            <div className="flex flex-wrap gap-1">
-                                                {item.addressed_gaps.map((g, gIdx) => (
-                                                    <Badge
-                                                        key={gIdx}
-                                                        variant="secondary"
-                                                        className="text-[10px] font-normal border-amber-200 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
-                                                    >
-                                                        {g.gap_name} ({g.severity}% severity)
-                                                    </Badge>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        {/* Matching Criteria */}
-                                        {item.matching_criteria.length > 0 && (
-                                            <div className="flex flex-col gap-1 border-t pt-2 dark:border-slate-800">
-                                                <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-400">Matching Basis:</span>
-                                                <ul className="list-disc pl-4 text-[10px] text-muted-foreground space-y-0.5">
-                                                    {item.matching_criteria.slice(0, 2).map((crit, cIdx) => (
-                                                        <li key={cIdx}>{crit}</li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        )}
-
-                                        <div className="mt-auto pt-2 border-t text-[10px] text-muted-foreground dark:border-slate-800">
-                                            Target Beneficiaries: <em>{item.intended_beneficiaries}</em>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* VIEW 2: By Specific Gap */}
-                {viewMode === 'by_gap' && (
-                    <div className="flex flex-col gap-4">
-                        {gapsMatches.map((gm: any, idx: number) => (
-                            <Card key={idx} className="border-blue-100 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
-                                <CardHeader className="pb-3 border-b dark:border-slate-800">
-                                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                                        <div>
-                                            <Badge variant="outline" className="text-[10px] font-mono uppercase">
-                                                Gap Domain: {gm.domain}
-                                            </Badge>
-                                            <CardTitle className="text-sm font-semibold mt-1 text-slate-900 dark:text-slate-100">
-                                                {gm.gap_name}
-                                            </CardTitle>
-                                        </div>
-                                        <span className="text-xs text-muted-foreground">
-                                            Severity: <span className="font-bold text-amber-700 dark:text-amber-400">{gm.severity}%</span>
-                                        </span>
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="flex flex-col gap-3 pt-3 text-xs">
-                                    {gm.matched_interventions && gm.matched_interventions.length > 0 ? (
-                                        <div className="grid gap-3 sm:grid-cols-2">
-                                            {gm.matched_interventions.map((mi: any, miIdx: number) => (
-                                                <div
-                                                    key={miIdx}
-                                                    className="flex flex-col gap-2 rounded-lg border border-slate-100 bg-slate-50/60 p-3 dark:border-slate-800 dark:bg-slate-950"
-                                                >
-                                                    <div className="flex items-start justify-between gap-2">
-                                                        <div className="font-semibold text-slate-900 dark:text-slate-100">
-                                                            {mi.name}
-                                                        </div>
-                                                        <Badge className="bg-[#087dcc] shrink-0 text-[10px]">
-                                                            {mi.relevance_score}% Relevance
-                                                        </Badge>
-                                                    </div>
-
-                                                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                                                        <span>Agency: <strong>{mi.agency}</strong></span>
-                                                        <span>·</span>
-                                                        <span>Status: <strong className="capitalize">{mi.availability_status}</strong></span>
-                                                    </div>
-
-                                                    {mi.matching_criteria && (
-                                                        <div className="flex flex-col gap-1 border-t pt-2 dark:border-slate-800">
-                                                            <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-400">Matching Basis:</span>
-                                                            <ul className="list-disc pl-4 text-[10px] text-muted-foreground space-y-0.5">
-                                                                {mi.matching_criteria.map((crit: string, cIdx: number) => (
-                                                                    <li key={cIdx}>{crit}</li>
-                                                                ))}
-                                                            </ul>
-                                                        </div>
-                                                    )}
-
-                                                    <div className="text-[10px] text-muted-foreground mt-auto">
-                                                        Target Beneficiaries: <em>{mi.intended_beneficiaries}</em>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <p className="text-muted-foreground text-xs italic">
-                                            {gm.gap_unmatched_note ?? 'No verified DOST catalog intervention currently recorded for this specific gap domain.'}
-                                        </p>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </div>
-                )}
-            </div>
-
-            {/* Implementation Partners & Requirements Grid */}
-            <div className="grid gap-4 md:grid-cols-2">
-                {/* Verified Partners */}
-                {partners?.partners && (
-                    <Card className="border-blue-100 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
-                        <CardHeader className="pb-2">
-                            <div className="flex items-center gap-2">
-                                <Users className="size-4 text-[#087dcc]" />
-                                <CardTitle className="text-sm font-semibold">Verified Implementation Partners</CardTitle>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="flex flex-col gap-2 text-xs">
-                            {partners.partners.slice(0, 4).map((p: any, idx: number) => (
-                                <div key={idx} className="border-b pb-2 last:border-b-0 dark:border-slate-800">
-                                    <div className="font-semibold text-slate-900 dark:text-slate-100">{p.partner_name}</div>
-                                    <div className="text-[10px] text-muted-foreground">{p.partner_type} · {p.jurisdiction}</div>
-                                    <p className="text-[11px] text-muted-foreground mt-0.5">{p.suggested_role}</p>
-                                </div>
-                            ))}
-                        </CardContent>
-                    </Card>
-                )}
-
-                {/* Resource & Operational Requirements */}
-                {requirements?.requirements && (
-                    <Card className="border-blue-100 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
-                        <CardHeader className="pb-2">
-                            <div className="flex items-center gap-2">
-                                <Wrench className="size-4 text-emerald-600" />
-                                <CardTitle className="text-sm font-semibold">Technical &amp; Operational Requirements</CardTitle>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="flex flex-col gap-3 text-xs">
-                            {requirements.requirements.equipment_and_hardware && (
-                                <div>
-                                    <span className="text-[11px] font-semibold text-slate-800 dark:text-slate-200">Hardware &amp; Equipment Package:</span>
-                                    <p className="text-[11px] text-muted-foreground">
-                                        {requirements.requirements.equipment_and_hardware.primary_hardware}
-                                    </p>
-                                </div>
-                            )}
-
-                            {requirements.requirements.infrastructure_prerequisites && (
-                                <div className="border-t pt-2 dark:border-slate-800">
-                                    <span className="text-[11px] font-semibold text-slate-800 dark:text-slate-200">Facility &amp; Utility Readiness:</span>
-                                    <p className="text-[11px] text-muted-foreground">
-                                        {requirements.requirements.infrastructure_prerequisites.electricity_required ? 'Stable AC Power / Solar Back-up' : 'Off-grid Operable'}
-                                        {' · '}
-                                        {requirements.requirements.infrastructure_prerequisites.connectivity_required ? 'Cellular / Internet Connection' : 'Offline Mode Supported'}
-                                    </p>
-                                </div>
-                            )}
-
-                            {requirements.requirements.staffing_and_training && (
-                                <div className="border-t pt-2 dark:border-slate-800">
-                                    <span className="text-[11px] font-semibold text-slate-800 dark:text-slate-200">Personnel &amp; Operational Capacity:</span>
-                                    <p className="text-[11px] text-muted-foreground">
-                                        {requirements.requirements.staffing_and_training.training_capacity_notes || 'Designated local operator with DOST technical training and equipment orientation.'}
-                                    </p>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                )}
-            </div>
-        </div>
-    );
-}
+const LayerEInterventionsSection = InterventionSectorTable;
