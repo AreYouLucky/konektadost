@@ -18,6 +18,7 @@ use App\FunctionTools\LayerB\AnalyzeSafetyAndDrrmTool;
 use App\FunctionTools\LayerB\AnalyzeStiLaboratoryCapacityTool;
 use App\FunctionTools\LayerB\CalculateIndicatorsTool;
 use App\FunctionTools\LayerC\CalculatePriorityScoresTool;
+use App\FunctionTools\LayerC\CompareLocationsTool;
 use App\FunctionTools\LayerC\DetectDevelopmentGapsTool;
 use App\FunctionTools\LayerC\IdentifyUnderservedAreasTool;
 use App\FunctionTools\LayerD\GetLocalDostProjectsTool;
@@ -32,8 +33,9 @@ use App\FunctionTools\LayerF\DefinePerformanceIndicatorsTool;
 use App\FunctionTools\LayerF\EstimateInterventionOutcomesTool;
 use App\FunctionTools\LayerF\GenerateActionPlanTool;
 use App\FunctionTools\LayerF\GenerateInterventionPlanTool;
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Municipality;
 use App\Support\Caching\ReadCache;
+use Illuminate\Database\Eloquent\Model;
 use InvalidArgumentException;
 
 /**
@@ -73,6 +75,7 @@ class FunctionToolRegistry
         DetectDevelopmentGapsTool::class,         // C1: detect_development_gaps
         IdentifyUnderservedAreasTool::class,      // C2: identify_underserved_areas
         CalculatePriorityScoresTool::class,       // C3: calculate_priority_scores
+        CompareLocationsTool::class,              // C4: compare_locations (side-by-side with another municipality)
 
         // Layer D – DOST Catalog and Project Retrieval
         SearchDostTechnologiesTool::class,        // D1: search_dost_technologies
@@ -229,9 +232,9 @@ class FunctionToolRegistry
 
         $matched = app(MatchDostInterventionsTool::class)->execute($idArgs);
         $topIntervention = null;
-        if (!empty($matched['gap_interventions'])) {
+        if (! empty($matched['gap_interventions'])) {
             foreach ($matched['gap_interventions'] as $gapMatch) {
-                if (!empty($gapMatch['matched_interventions'])) {
+                if (! empty($gapMatch['matched_interventions'])) {
                     $topIntervention = $gapMatch['matched_interventions'][0];
                     break;
                 }
@@ -242,7 +245,7 @@ class FunctionToolRegistry
         $evalArgs = array_merge($idArgs, $interventionArg, $options);
 
         // Keep screening results when detailed evaluation has no actual candidate or municipal baseline.
-        if (! $location instanceof \App\Models\Municipality || ($topIntervention === null && empty($options['intervention_id']))) {
+        if (! $location instanceof Municipality || ($topIntervention === null && empty($options['intervention_id']))) {
             return [
                 'matched_interventions' => $matched,
                 'suitability_assessment' => null,

@@ -1,14 +1,25 @@
 import type { AiResult } from '@/components/assessment-ai-analysis';
 import { jsPDF } from 'jspdf';
 import { autoTable, type RowInput } from 'jspdf-autotable';
-import { actionPlanColumns, actionPlanFilename, buildAssessmentActionPlan } from './assessment-action-plan';
+import { actionPlanColumns, actionPlanFilename, buildAssessmentActionPlan, type ActionPlanActivity } from './assessment-action-plan';
 import { assessmentDataSources } from './assessment-data-sources';
 import { explainNumber } from './assessment-explanations';
 import { loadAssessmentPdfFonts, pdfText, type PdfFonts } from './assessment-pdf';
 import type { AssessmentReportInput, OverviewChart } from './assessment-report';
+import { buildTargetAreas, type TargetAreaSet } from './assessment-targets';
+
+/** Light-mode `.viz-palette` series, in the same fixed order the on-screen charts use. */
+const SERIES_HEX = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6'];
+const PHASES: { phase: ActionPlanActivity['phase']; title: string; weeks: string; range: [number, number]; caption: string; color: string }[] = [
+    { phase: 'Validation', title: 'Validate', weeks: 'Weeks 1-2', range: [1, 2], caption: 'needs & sites', color: SERIES_HEX[0] },
+    { phase: 'Preparation', title: 'Prepare', weeks: 'Weeks 3-4', range: [3, 4], caption: 'fit, cost, partners', color: SERIES_HEX[1] },
+    { phase: 'Pilot', title: 'Pilot', weeks: 'Weeks 5-8', range: [5, 8], caption: 'if validated', color: SERIES_HEX[2] },
+    { phase: 'Review', title: 'Review', weeks: 'Weeks 9-12', range: [9, 12], caption: 'results & next steps', color: SERIES_HEX[3] },
+];
 
 export function createActionPlanPdf(report: AssessmentReportInput, fonts: PdfFonts, analysis?: AiResult, date = new Date()) {
     const plan = buildAssessmentActionPlan(report, analysis, date);
+    const targetSet: TargetAreaSet | null = buildTargetAreas(report, 10);
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true, putOnlyUsedFonts: true });
     doc.addFileToVFS('NotoSans-Regular.ttf', fonts.regular);
     doc.addFont('NotoSans-Regular.ttf', 'NotoSans', 'normal');
@@ -111,6 +122,173 @@ export function createActionPlanPdf(report: AssessmentReportInput, fonts: PdfFon
         }
         return rowY;
     }
+    function chartTitle(title: string, hint: string, x: number, top: number, chartWidth: number) {
+        doc.setFont('NotoSans', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(8, 125, 204);
+        doc.text(pdfText(title), x, top);
+        doc.setFont('NotoSans', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(71, 85, 105);
+        const lines = doc.splitTextToSize(pdfText(hint), chartWidth) as string[];
+        doc.text(lines, x, top + 5);
+        return top + 5 + lines.length * 3.1 + 2;
+    }
+    /** Colour swatch + label pairs that wrap onto new lines; identity is never colour alone. */
+    function legend(items: { label: string; color: string }[], x: number, top: number, maxWidth: number) {
+        doc.setFont('NotoSans', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(51, 65, 85);
+        let cursor = x,
+            line = top;
+        for (const item of items) {
+            const label = pdfText(item.label);
+            const itemWidth = 5 + doc.getTextWidth(label) + 6;
+            if (cursor + itemWidth > x + maxWidth && cursor > x) {
+                cursor = x;
+                line += 5;
+            }
+            doc.setFillColor(item.color);
+            doc.roundedRect(cursor, line - 2.4, 3, 3, 0.6, 0.6, 'F');
+            doc.text(label, cursor + 4.5, line);
+            cursor += itemWidth;
+        }
+        return line + 5;
+    }
+    /** Same four phases as the on-screen strip, each with its colour, weeks and purpose. */
+    function phaseStrip(top: number) {
+        const gap = 4,
+            boxWidth = (width - gap * 3) / 4;
+        PHASES.forEach((item, index) => {
+            const x = margin + index * (boxWidth + gap);
+            doc.setFillColor(248, 250, 252);
+            doc.setDrawColor(226, 232, 240);
+            doc.setLineWidth(0.25);
+            doc.roundedRect(x, top, boxWidth, 15, 2, 2, 'FD');
+            doc.setFillColor(item.color);
+            doc.rect(x, top + 2, 1.4, 11, 'F');
+            doc.setFont('NotoSans', 'bold');
+            doc.setFontSize(9);
+            doc.setTextColor(15, 23, 42);
+            doc.text(`${index + 1}. ${item.title}`, x + 5, top + 5.6);
+            doc.setFont('NotoSans', 'normal');
+            doc.setFontSize(7.5);
+            doc.setTextColor(71, 85, 105);
+            doc.text(pdfText(`${item.weeks} · ${item.caption}`), x + 5, top + 10.8);
+            if (index < PHASES.length - 1) {
+                doc.setDrawColor(148, 163, 184);
+                doc.line(x + boxWidth + 0.8, top + 7.5, x + boxWidth + gap - 0.8, top + 7.5);
+            }
+        });
+        return top + 15 + 6;
+    }
+    /** Points per factor for each target area, stacked to the priority score (0-100). */
+    function stackedTargets(set: TargetAreaSet, x: number, top: number, chartWidth: number) {
+        const level = set.level === 'municipality' ? 'cities / municipalities' : 'barangays';
+        let rowY = chartTitle(
+            `Top ${set.areas.length} target ${level} · score breakdown`,
+            'Each bar is the priority score (0-100); each colour is the points one factor adds. Longer bars = review first.',
+            x,
+            top,
+            chartWidth,
+        );
+        const colors = set.factors.map((_, index) => SERIES_HEX[index % SERIES_HEX.length]);
+        rowY = legend(
+            set.factors.map((factor, index) => ({ label: factor.label, color: colors[index] })),
+            x,
+            rowY + 1,
+            chartWidth,
+        );
+        const labelWidth = 58,
+            valueWidth = 14,
+            barWidth = chartWidth - labelWidth - valueWidth;
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.2);
+        for (const tick of [0, 25, 50, 75, 100]) {
+            const tickX = x + labelWidth + (tick / 100) * barWidth;
+            doc.line(tickX, rowY - 1, tickX, rowY + set.areas.length * 7 - 2);
+            doc.setFontSize(6.5);
+            doc.setTextColor(148, 163, 184);
+            doc.text(String(tick), tickX, rowY + set.areas.length * 7 + 1.2, { align: 'center' });
+        }
+        rowY += 2;
+        for (const area of set.areas) {
+            doc.setFont('NotoSans', 'normal');
+            doc.setFontSize(7.5);
+            doc.setTextColor(51, 65, 85);
+            const label = (doc.splitTextToSize(pdfText(`${area.rank}. ${area.name}`), labelWidth - 3) as string[])[0];
+            doc.text(label, x, rowY + 1.6);
+            let cursor = x + labelWidth;
+            set.factors.forEach((factor, index) => {
+                const value = area.components[factor.key] ?? 0;
+                if (value <= 0) return;
+                const segment = (Math.min(100, value) / 100) * barWidth;
+                doc.setFillColor(colors[index]);
+                doc.rect(cursor, rowY - 1.4, Math.max(0.4, segment - 0.4), 3.6, 'F');
+                cursor += segment;
+            });
+            doc.setFont('NotoSans', 'bold');
+            doc.setTextColor(15, 23, 42);
+            doc.text(explainNumber(area.score), x + chartWidth, rowY + 1.6, { align: 'right' });
+            rowY += 7;
+        }
+        return rowY + 10;
+    }
+    /** 12-week Gantt of the proposed activities, coloured by phase. */
+    function timeline(activities: ActionPlanActivity[], x: number, top: number, chartWidth: number) {
+        let rowY = chartTitle('12-week timeline', 'Proposed schedule; pilot depends on validation.', x, top, chartWidth);
+        rowY = legend(
+            PHASES.map((item) => ({ label: item.phase, color: item.color })),
+            x,
+            rowY + 1,
+            chartWidth,
+        );
+        const labelWidth = 92,
+            gridWidth = chartWidth - labelWidth,
+            column = gridWidth / 12,
+            rowHeight = 8,
+            gridTop = rowY + 1,
+            gridBottom = gridTop + 6 + activities.length * rowHeight;
+        PHASES.forEach((item, index) => {
+            if (index % 2) return;
+            const [start, end] = item.range;
+            doc.setFillColor(241, 245, 249);
+            doc.rect(x + labelWidth + (start - 1) * column, gridTop, (end - start + 1) * column, gridBottom - gridTop, 'F');
+        });
+        doc.setFont('NotoSans', 'bold');
+        doc.setFontSize(7);
+        doc.setTextColor(100, 116, 139);
+        for (let week = 1; week <= 12; week++) {
+            const columnX = x + labelWidth + (week - 1) * column;
+            doc.text(`W${week}`, columnX + column / 2, gridTop + 4, { align: 'center' });
+            doc.setDrawColor(226, 232, 240);
+            doc.setLineWidth(0.2);
+            doc.line(columnX, gridTop, columnX, gridBottom);
+        }
+        doc.line(x + labelWidth + gridWidth, gridTop, x + labelWidth + gridWidth, gridBottom);
+        doc.line(x, gridTop + 6, x + chartWidth, gridTop + 6);
+        rowY = gridTop + 6;
+        for (const row of activities) {
+            const color = PHASES.find((item) => item.phase === row.phase)?.color ?? SERIES_HEX[0];
+            doc.setFont('NotoSans', 'normal');
+            doc.setFontSize(7.5);
+            doc.setTextColor(51, 65, 85);
+            const label = (doc.splitTextToSize(pdfText(row.activity), labelWidth - 4) as string[]).slice(0, 2);
+            doc.text(label, x, rowY + (label.length > 1 ? 3 : 4.9));
+            const barX = x + labelWidth + (row.startWeek - 1) * column + 0.6;
+            const barWidth = (row.endWeek - row.startWeek + 1) * column - 1.2;
+            doc.setFillColor(color);
+            doc.roundedRect(barX, rowY + 2, barWidth, 4, 1, 1, 'F');
+            doc.setFont('NotoSans', 'bold');
+            doc.setFontSize(6.5);
+            doc.setTextColor(255, 255, 255);
+            if (barWidth > 14) doc.text(`W${row.startWeek}-${row.endWeek}`, barX + barWidth / 2, rowY + 4.9, { align: 'center' });
+            doc.setDrawColor(241, 245, 249);
+            doc.line(x, rowY + rowHeight, x + chartWidth, rowY + rowHeight);
+            rowY += rowHeight;
+        }
+        return rowY + 5;
+    }
     const stamp = new Intl.DateTimeFormat('en-PH', { timeZone: 'Asia/Singapore', dateStyle: 'medium', timeStyle: 'short' }).format(date);
     heading(`KonektaDOST · ${plan.location} Action Plan`, 18);
     paragraph(
@@ -130,11 +308,31 @@ export function createActionPlanPdf(report: AssessmentReportInput, fonts: PdfFon
             : 'Computed draft. No completed, matching AI interpretation was available; the action plan remains based on the recorded assessment.',
         8,
     );
+    ensure(24);
+    y = phaseStrip(y + 1);
     heading('1 · Priority areas');
-    table(
-        ['Area for review', 'Basis'],
-        plan.priorities.map((row) => [row.area, row.basis]),
-    );
+    if (plan.targets.length) {
+        paragraph(
+            `Top ${plan.targets.length} target ${plan.targetLevel === 'municipality' ? 'cities/municipalities' : 'barangays'}, ranked by priority score (population need plus recorded service gaps). Each row lists why it ranks high and the DOST option that fits its biggest gap.`,
+            8,
+        );
+        table(
+            ['#', 'Target area', 'Score /100', 'Why it ranks high', 'Suggested DOST technology / program'],
+            plan.targets.map((row) => [String(row.rank), row.name, explainNumber(row.score), row.why, row.technologies]),
+            [10, 52, 20, 97, 90],
+        );
+        if (targetSet && targetSet.areas.length && targetSet.factors.length) {
+            ensure(40 + targetSet.areas.length * 7);
+            y = stackedTargets(targetSet, margin, y + 4, 200);
+        } else {
+            ensure(80);
+            y = chart(plan.charts[2], margin, y + 4, 180) + 2;
+        }
+    } else
+        table(
+            ['Area for review', 'Basis'],
+            plan.priorities.map((row) => [row.area, row.basis]),
+        );
     heading('2 · Critical needs and development gaps');
     table(
         ['Need', 'Recorded local baseline / national reference', 'Severity / confidence'],
@@ -219,6 +417,13 @@ export function createActionPlanPdf(report: AssessmentReportInput, fonts: PdfFon
     y = Math.max(chart(plan.charts[0], margin, chartTop, 128), chart(plan.charts[1], 155, chartTop, 128)) + 3;
     paragraph(
         'Gap severity shows comparison size and confidence; relevance shows catalog fit. Neither graph proves unmet demand, deployment readiness or guaranteed impact.',
+        8,
+    );
+
+    page('Timeline · 12-week proposed schedule');
+    y = timeline(plan.activities, margin, y + 2, width);
+    paragraph(
+        'Weeks run from the agreed plan start. Validation comes first; preparation and pilot activities proceed only if need, fit and resources are confirmed. Review closes the cycle.',
         8,
     );
 

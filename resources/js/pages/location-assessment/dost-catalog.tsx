@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Search } from 'lucide-react';
 import { useState } from 'react';
@@ -8,21 +8,7 @@ import type { DostInterventionItem, LocalDostProjectItem } from './types';
 
 export function LocalDostProjectsSection({ cityName, data }: { cityName: string; data?: any }) {
     if (!data) {
-        return (
-            <Card>
-                <CardHeader className="pb-2">
-                    <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="font-mono text-xs">
-                            Layer D · get_local_dost_projects
-                        </Badge>
-                        <CardTitle className="text-sm font-semibold">Recorded DOST Agency Projects ({cityName})</CardTitle>
-                    </div>
-                </CardHeader>
-                <CardContent className="text-muted-foreground p-5 text-sm">
-                    No historical or ongoing DOST projects data recorded in <code>dost_projects</code> for this locality.
-                </CardContent>
-            </Card>
-        );
+        return <p className="text-muted-foreground text-sm">No past or ongoing DOST project records mention {cityName}.</p>;
     }
 
     const projects: LocalDostProjectItem[] = Array.isArray(data?.projects) ? data.projects : [];
@@ -30,17 +16,9 @@ export function LocalDostProjectsSection({ cityName, data }: { cityName: string;
 
     return (
         <section className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="font-mono text-xs">
-                        Layer D · get_local_dost_projects
-                    </Badge>
-                    <h2 className="text-lg font-semibold tracking-tight">Recorded DOST Agency Projects ({cityName} / Province)</h2>
-                </div>
-                <p className="text-muted-foreground text-sm">
-                    {totalMatched} historical and ongoing DOST project records matched from <code>dost_projects</code>.
-                </p>
-            </div>
+            <p className="text-muted-foreground text-xs">
+                {totalMatched} past and ongoing project records mention this place. They show local experience, not current offers.
+            </p>
 
             {projects.length === 0 ? (
                 <Card>
@@ -114,14 +92,7 @@ export function DostTechnologiesCatalogSection({
     return (
         <section className="flex flex-col gap-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="font-mono text-xs">
-                        Layer D · search_dost_technologies
-                    </Badge>
-                    <h2 className="text-lg font-semibold tracking-tight text-[#087dcc] dark:text-blue-200">
-                        DOST Technology &amp; STI Programs Catalog
-                    </h2>
-                </div>
+                <h2 className="text-base font-semibold tracking-tight text-slate-900 dark:text-slate-100">DOST technologies &amp; STI programs</h2>
                 <div className="relative w-full sm:w-64">
                     <Search className="text-muted-foreground absolute top-2.5 left-2.5 size-3.5" />
                     <Input

@@ -262,4 +262,6 @@ export interface AssessmentPageProps {
     resourceSummary?: ProvinceResourceData;
     agricultureSummary?: AgricultureSummary;
     projectCatalog?: ProjectCatalogData;
+    /** Province scope only: ranked cities/municipalities (TargetAreaRanking). */
+    targetAreas?: unknown;
 }

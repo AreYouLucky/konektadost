@@ -74,7 +74,7 @@ export default function AssessmentCharts({
                 ))}
             </div>
             <EvidenceVisuals results={results} dimensions={dimensions} />
-            <div className="grid items-start gap-4 xl:grid-cols-2">
+            <div className="grid gap-4 xl:grid-cols-2">
                 <ReferenceIndexChart results={results} />
                 <Card className={chartCard}>
                     <CardContent className="p-5">

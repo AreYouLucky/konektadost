@@ -1,16 +1,30 @@
+import { ExplainButton } from '@/components/assessment-method/charts';
+import { ExplainBlocks, OVERVIEW_EXPLAIN } from '@/components/assessment-method/explain';
 import { explainNumber } from '@/lib/assessment-explanations';
 import type { LayerOverview, OverviewChart } from '@/lib/assessment-report';
-import { BarChart3 } from 'lucide-react';
-import { useId } from 'react';
+import { Lightbulb, type LucideIcon } from 'lucide-react';
+import { useId, type ReactNode } from 'react';
 
-function OverviewBars({ chart }: { chart: OverviewChart }) {
+/** One overview bar chart as a card; `className` lets a grid make it span both columns. */
+export function OverviewBars({ chart, className = '' }: { chart: OverviewChart; className?: string }) {
     const id = useId();
     const maximum = chart.maximum ?? Math.max(1, ...chart.rows.map((row) => row.value ?? 0));
+    const explain = OVERVIEW_EXPLAIN[chart.title];
     return (
-        <figure aria-labelledby={id} className="min-w-0 rounded-xl border border-sky-100 bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
-            <figcaption id={id}>
-                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{chart.title}</h3>
-                <p className="text-muted-foreground mt-1 text-xs leading-relaxed">{chart.description}</p>
+        <figure
+            aria-labelledby={id}
+            className={`min-w-0 rounded-2xl border border-sky-100 bg-white p-4 dark:border-slate-800 dark:bg-slate-950 ${className}`}
+        >
+            <figcaption id={id} className="flex items-start gap-2">
+                <span className="min-w-0 flex-1">
+                    <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{chart.title}</h3>
+                    <p className="text-muted-foreground mt-1 text-[11px] leading-relaxed">{chart.description}</p>
+                </span>
+                {explain && (
+                    <ExplainButton title={chart.title}>
+                        <ExplainBlocks what={explain.what} how={explain.how} read={explain.read} />
+                    </ExplainButton>
+                )}
             </figcaption>
 
             <div className="mt-4 space-y-3">
@@ -50,62 +64,60 @@ function OverviewBars({ chart }: { chart: OverviewChart }) {
     );
 }
 
-export function AssessmentLayerOverview({ overview }: { overview: LayerOverview }) {
+/** Full-width step header: step badge, title, one-line summary, key numbers, takeaway and the method button. */
+export function StepHeader({
+    overview,
+    step,
+    label,
+    icon: Icon,
+    action,
+}: {
+    overview: LayerOverview;
+    step: string;
+    label: string;
+    icon: LucideIcon;
+    action?: ReactNode;
+}) {
     return (
         <section
-            aria-label={`${overview.title} overview`}
-            className="min-w-0 rounded-2xl border border-sky-200 bg-linear-to-br from-sky-50 to-white p-4 sm:p-5 dark:border-slate-800 dark:from-slate-900 dark:to-slate-950"
+            aria-label={`${label} summary`}
+            className="min-w-0 rounded-2xl border border-sky-200 bg-linear-to-br from-sky-50 via-white to-white p-4 sm:p-5 dark:border-slate-800 dark:from-slate-900 dark:via-slate-950 dark:to-slate-950"
         >
-            <div className="mb-4 flex items-start gap-3">
-                <span className="rounded-xl bg-[#087dcc] p-2 text-white">
-                    <BarChart3 className="size-5" aria-hidden="true" />
-                </span>
-                <div className="min-w-0">
-                    <p className="text-[10px] font-semibold tracking-wider text-[#087dcc] uppercase">Layer overview</p>
-                    <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{overview.title}</h2>
-                    <p className="text-muted-foreground mt-1 max-w-4xl text-sm leading-relaxed">{overview.summary}</p>
-                </div>
-            </div>
-            <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-                {overview.metrics.map((metric) => (
-                    <div
-                        key={metric.label}
-                        className="min-w-0 rounded-xl border border-sky-100 bg-white/90 p-3 dark:border-slate-800 dark:bg-slate-950"
-                    >
-                        <p className="text-muted-foreground text-xs">{metric.label}</p>
-                        <p className="mt-1 text-xl font-semibold break-words text-[#087dcc] sm:text-2xl">{metric.value}</p>
-                        <p className="text-muted-foreground mt-1 text-[11px]">{metric.note}</p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#087dcc] text-white shadow-sm">
+                        <Icon className="size-5" aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0">
+                        <p className="text-[10px] font-semibold tracking-wider text-[#087dcc] uppercase">Step {step}</p>
+                        <h2 className="text-lg leading-snug font-semibold text-slate-900 dark:text-slate-100">{label}</h2>
+                        <p className="text-muted-foreground text-sm">{overview.summary}</p>
                     </div>
-                ))}
+                </div>
+                {action}
             </div>
-            <div className="grid items-start gap-4 xl:grid-cols-2">
-                {overview.charts.map((chart) => (
-                    <OverviewBars key={chart.title} chart={chart} />
-                ))}
-            </div>
-        </section>
-    );
-}
-
-export function AssessmentLayerExplanation({ overview }: { overview: LayerOverview }) {
-    return (
-        <section
-            aria-label={`${overview.title} explanation`}
-            className="min-w-0 rounded-xl border border-sky-200 bg-white p-4 sm:p-5 dark:border-slate-800 dark:bg-slate-950"
-        >
-            <p className="text-sm text-slate-700 dark:text-slate-200">{overview.interpretation}</p>
-            <p className="text-muted-foreground mt-2 text-xs">
-                <strong>How this was calculated: </strong>
-                {methodSummaries[overview.key]} Use Source &amp; basis for recorded inputs and worked formulas.
+            {overview.metrics.length > 0 && (
+                <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]">
+                    {overview.metrics.map((metric) => (
+                        <div
+                            key={metric.label}
+                            className="min-w-0 rounded-xl border border-sky-100 bg-white px-3 py-2.5 dark:border-slate-800 dark:bg-slate-950"
+                        >
+                            <dt className="truncate text-[11px] font-medium text-slate-600 dark:text-slate-300">{metric.label}</dt>
+                            <dd className="mt-0.5 text-xl font-semibold break-words text-[#087dcc] tabular-nums">{metric.value}</dd>
+                            {metric.note && (
+                                <p className="text-muted-foreground truncate text-[10px]" title={metric.note}>
+                                    {metric.note}
+                                </p>
+                            )}
+                        </div>
+                    ))}
+                </dl>
+            )}
+            <p className="mt-3 flex gap-2 rounded-xl bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
+                <Lightbulb className="mt-0.5 size-3.5 shrink-0 text-amber-500" aria-hidden="true" />
+                {overview.interpretation}
             </p>
         </section>
     );
 }
-
-const methodSummaries = {
-    profile_assets: 'Counts use records linked to this area; growth compares matching census years.',
-    sectors_roads: 'Local count ÷ population × rate unit; gap = (local − national reference) ÷ reference × 100.',
-    gaps_barangays: 'Severity = capped absolute gap × confidence weight; barangay priority combines its active component scores.',
-    dost_catalog: 'Catalog records are retrieved by source fields; local projects use location-name screening.',
-    matched_interventions: 'Relevance adds sector, keyword, asset and status points; each option shows its best returned match.',
-};

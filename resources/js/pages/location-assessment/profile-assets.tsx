@@ -3,17 +3,11 @@ import { Card, CardContent } from '@/components/ui/card';
 import SourceBasisModal from './source-basis-modal';
 import type { FunctionToolsBundle } from './types';
 
-export function DatasetAuditSection({ cityName, audit }: { cityName: string; audit: NonNullable<FunctionToolsBundle['dataset_audit']> }) {
+export function DatasetAuditSection({ audit }: { cityName?: string; audit: NonNullable<FunctionToolsBundle['dataset_audit']> }) {
     const datasets = Object.values(audit.datasets);
 
     return (
         <section className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                    <h2 className="text-lg font-semibold tracking-tight">Dataset coverage ({cityName})</h2>
-                </div>
-            </div>
-
             <Card>
                 <CardContent className="p-0">
                     <div className="overflow-x-auto">

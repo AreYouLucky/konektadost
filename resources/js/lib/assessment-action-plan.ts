@@ -12,6 +12,7 @@ import {
     type AssessmentReportInput,
     type OverviewChart,
 } from './assessment-report';
+import { buildTargetAreas } from './assessment-targets';
 
 export const actionPlanColumns = ['ACTIVITIES', 'OBJECTIVES', 'RESULTS', 'TIMELINE', 'BUDGET/RESOURCES', 'RESPONSIBLE (PERSON/OFFICE)'] as const;
 export interface ActionPlanActivity {
@@ -34,6 +35,14 @@ export interface ActionPlanOption {
     why: string;
     aiNote: string | null;
 }
+export interface ActionPlanTarget {
+    rank: number;
+    name: string;
+    score: number;
+    population: number | null;
+    why: string;
+    technologies: string;
+}
 export interface AssessmentActionPlan {
     location: string;
     level: string;
@@ -43,6 +52,9 @@ export interface AssessmentActionPlan {
     aiGeneratedAt: string | null;
     options: ActionPlanOption[];
     priorities: { area: string; basis: string }[];
+    /** Top 10 ranked target areas: cities/municipalities for a province, barangays for a city/municipality. */
+    targets: ActionPlanTarget[];
+    targetLevel: 'municipality' | 'barangay' | null;
     needs: { name: string; baseline: string; severity: number | null; confidence: string; source: string }[];
     activities: ActionPlanActivity[];
     laboratory: string;
@@ -91,16 +103,25 @@ export function buildAssessmentActionPlan(report: AssessmentReportInput, analysi
             confidence: reportText(row.confidence, 'unrecorded'),
             source: reportText(row.source),
         }));
-    const ranked = [...(report.barangayAssessment?.barangays ?? [])]
-        .filter((row) => row.priority_score != null && row.population != null)
-        .sort((a, b) => b.priority_score! - a.priority_score!)
-        .slice(0, 5);
-    const priorities = ranked.length
-        ? ranked.map((row) => ({
-              area: row.name,
-              basis: `Review priority ${explainNumber(row.priority_score)}/100; validate need and site readiness.`,
+    const targetSet = buildTargetAreas(report, 10);
+    const targets: ActionPlanTarget[] = (targetSet?.areas ?? []).map((area) => ({
+        rank: area.rank,
+        name: area.name,
+        score: area.score,
+        population: area.population,
+        why: area.drivers.map((driver) => driver.text).join('; ') || 'Composite review priority',
+        technologies:
+            area.technologies.map((tech) => (tech.general ? `${tech.name} (overall best match)` : tech.name)).join('; ') || 'No catalog match yet',
+    }));
+    const priorities = targets.length
+        ? targets.slice(0, 5).map((row) => ({
+              area: `${row.rank}. ${row.name}`,
+              basis: `Priority ${explainNumber(row.score)}/100 · ${row.why}. Suggested: ${row.technologies}.`,
           }))
         : [{ area: report.location.name, basis: 'Selected area only. Individual deployment sites require local validation.' }];
+    const topNames = targets.slice(0, 5).map((row) => row.name);
+    const areasFor = (name: string) =>
+        (targetSet?.areas ?? []).filter((area) => area.technologies.some((tech) => tech.name === name && !tech.general)).map((area) => area.name);
     const labs = reportLaboratoryOptions(report);
     const localLab = labs.local[0];
     const referral = localLab ?? labs.nearby;
@@ -115,7 +136,9 @@ export function buildAssessmentActionPlan(report: AssessmentReportInput, analysi
     const activities: ActionPlanActivity[] = [
         {
             phase: 'Validation',
-            activity: `Validate local needs and priority sites in ${report.location.name}`,
+            activity: topNames.length
+                ? `Validate needs and site readiness in the top ${topNames.length} target ${targetSet?.level === 'municipality' ? 'cities/municipalities' : 'barangays'}: ${topNames.join(', ')}`
+                : `Validate local needs and priority sites in ${report.location.name}`,
             objective: 'Check inventory locations, service demand, baseline indicators and potential beneficiaries.',
             result: 'Verified baseline, documented needs and a locally reviewed site shortlist.',
             startWeek: 1,
@@ -127,7 +150,7 @@ export function buildAssessmentActionPlan(report: AssessmentReportInput, analysi
     options.forEach((option) =>
         activities.push({
             phase: 'Preparation',
-            activity: `Assess local adoption of ${option.name}`,
+            activity: `Assess local adoption of ${option.name}${areasFor(option.name).length ? ` in ${areasFor(option.name).slice(0, 3).join(', ')}` : ''}`,
             objective: `Confirm how the option could support ${option.need}; verify eligibility and complementary service requirements.`,
             result: `Documented fit, current availability and an adoption or referral proposal for ${option.name}.`,
             startWeek: 3,
@@ -225,6 +248,8 @@ export function buildAssessmentActionPlan(report: AssessmentReportInput, analysi
         aiGeneratedAt: options.some((row) => row.aiNote) ? analysis!.generated_at : null,
         options,
         priorities,
+        targets,
+        targetLevel: targetSet?.level ?? null,
         needs,
         activities,
         laboratory,
@@ -242,6 +267,12 @@ export function buildAssessmentActionPlan(report: AssessmentReportInput, analysi
                 description: 'Best returned match /100 for each option. Relevance is matching strength, not probability of success.',
                 maximum: 100,
                 rows: options.map((row) => ({ label: row.name, value: row.relevance })),
+            },
+            {
+                title: `Top target ${targetSet?.level === 'municipality' ? 'cities / municipalities' : 'barangays'}`,
+                description: 'Priority score /100: population need plus recorded service gaps. Review first, then validate on site.',
+                maximum: 100,
+                rows: targets.map((row) => ({ label: `${row.rank}. ${row.name}`, value: row.score, color: '#087dcc' })),
             },
         ],
     };

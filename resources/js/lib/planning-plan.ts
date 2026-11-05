@@ -64,8 +64,17 @@ function isHeader(cells: string[] | null): boolean {
     );
 }
 
+const TOOL_ID = String.raw`[a-z][a-z0-9]*(?:_[a-z0-9]+)+`;
+const TOOL_LIST = String.raw`(?:(?:tools?|sources?|via|from)\s*:?\s*)?${TOOL_ID}(?:\s*(?:,|;|\/|&|\band\b)\s*${TOOL_ID})*`;
+const TOOL_CITATION = new RegExp(String.raw`[ \t]*(?:\[\s*${TOOL_LIST}\s*\]|\(\s*${TOOL_LIST}\s*\))`, 'gi');
+
+/** Remove bracketed internal tool references such as "[generate_action_plan]" (older saved replies still contain them). */
+export function stripToolCitations(text: string) {
+    return text.replace(TOOL_CITATION, '');
+}
+
 export function parsePlanningPlan(snapshot: PlanningPlanSnapshot): PlanningPlanDocument {
-    const lines = snapshot.content.replaceAll('\r\n', '\n').split('\n');
+    const lines = stripToolCitations(snapshot.content).replaceAll('\r\n', '\n').split('\n');
     const named = lines.find((line) => /^\s*(?:plan title|action plan title):/i.test(line));
     const title =
         snapshot.title || (named ? named.replace(/^\s*(?:plan title|action plan title):\s*/i, '').trim() : `Action Plan for ${snapshot.location}`);

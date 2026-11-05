@@ -47,6 +47,7 @@ export interface AssessmentReportInput {
     analysisScopeNotice?: string;
     resourceSummary?: unknown;
     agricultureSummary?: unknown;
+    targetAreas?: unknown;
 }
 export interface OverviewChart {
     title: string;
@@ -254,7 +255,7 @@ export function buildLayerOverviews(report: AssessmentReportInput): Record<Asses
         profile_assets: {
             key: 'profile_assets',
             title: 'Layer A · Area & assets',
-            summary: `People and resources that could support a DOST intervention in ${report.location.name}.`,
+            summary: `People and resources in ${report.location.name}.`,
             metrics: [
                 metric('Datasets checked', audits.length ? audits.length : null, 'Inventory sources'),
                 metric('Location conflicts', report.inventoryIntegrity ? conflicts.length : null, 'Need validation'),
@@ -262,17 +263,17 @@ export function buildLayerOverviews(report: AssessmentReportInput): Record<Asses
             charts: [
                 {
                     title: 'Population across census years',
-                    description: 'Population counts by census year, using a common scale from zero. Missing figures stay unavailable.',
+                    description: 'By census year.',
                     rows: censusRows,
                 },
                 {
                     title: 'Recorded local assets',
-                    description: 'Recorded counts; missing or conflicting data stays unavailable.',
+                    description: 'Recorded counts in this area.',
                     rows: assetRows,
                 },
                 {
                     title: 'Dataset availability',
-                    description: 'Inventory completeness by source.',
+                    description: 'Datasets by completeness.',
                     rows: ['available', 'partial', 'empty', 'unavailable'].map((status) => ({
                         label: reportLabel(status),
                         value: audits.length ? audits.filter((row) => row.status === status).length : null,
@@ -293,7 +294,7 @@ export function buildLayerOverviews(report: AssessmentReportInput): Record<Asses
         sectors_roads: {
             key: 'sectors_roads',
             title: 'Layer B · Sector needs',
-            summary: 'Compare local services to identify needs a DOST technology or laboratory could address.',
+            summary: 'Local services compared with the national reference.',
             metrics: [
                 metric('Measured', measured.length, 'Indicators with a usable value'),
                 metric('With references', compared.length, 'Comparable indicators'),
@@ -303,14 +304,14 @@ export function buildLayerOverviews(report: AssessmentReportInput): Record<Asses
             charts: [
                 {
                     title: 'Local value relative to its reference',
-                    description: '100% = national reference; bars cap at 200%. Low service rates or high density flag needs. Gray = provisional.',
+                    description: '100% = national reference. Amber = flagged, gray = provisional.',
                     maximum: 200,
                     reference: 100,
                     rows: referenceRows,
                 },
                 {
                     title: 'Indicator evidence',
-                    description: 'Which comparisons have enough evidence?',
+                    description: 'How solid each comparison is.',
                     rows: [
                         { label: 'High-confidence comparisons', value: compared.filter((row) => row.confidence === 'high').length },
                         { label: 'Provisional comparisons', value: compared.filter((row) => row.confidence !== 'high').length, color: '#94a3b8' },
@@ -346,7 +347,7 @@ export function buildLayerOverviews(report: AssessmentReportInput): Record<Asses
             charts: [
                 {
                     title: 'Largest comparison gaps',
-                    description: 'Top six severity scores /100. Gray = provisional.',
+                    description: 'Top 6 severity scores /100. Gray = provisional.',
                     maximum: 100,
                     rows: [...gaps]
                         .sort((a, b) => (reportNumber(b.severity_score) ?? -1) - (reportNumber(a.severity_score) ?? -1))
@@ -359,7 +360,7 @@ export function buildLayerOverviews(report: AssessmentReportInput): Record<Asses
                 },
                 {
                     title: 'Gaps by sector',
-                    description: 'Unavailable = insufficient evidence or no gap model.',
+                    description: 'Gaps found per sector.',
                     rows: Object.entries(sectorNames).map(([sector, label]) => ({
                         label,
                         value:
@@ -375,7 +376,7 @@ export function buildLayerOverviews(report: AssessmentReportInput): Record<Asses
                     ? [
                           {
                               title: 'Highest barangay review priorities',
-                              description: 'Top six review priorities /100; validate before selecting a site.',
+                              description: 'Top 6 priority scores /100.',
                               maximum: 100,
                               rows: ranked.slice(0, 6).map((row) => ({
                                   label: row.name,
@@ -402,7 +403,7 @@ export function buildLayerOverviews(report: AssessmentReportInput): Record<Asses
         dost_catalog: {
             key: 'dost_catalog',
             title: 'Layer D · DOST catalog',
-            summary: 'Browse recorded technologies and project experience; see matched options in Technology & Lab Fit.',
+            summary: 'DOST technologies and past projects available to match.',
             metrics: [
                 metric(
                     'Local project records',
@@ -415,7 +416,7 @@ export function buildLayerOverviews(report: AssessmentReportInput): Record<Asses
             charts: [
                 {
                     title: 'Returned local projects by agency',
-                    description: 'Returned location-name matches; confirm the project location.',
+                    description: 'Past projects matched to this place.',
                     rows: [...agencies]
                         .sort((a, b) => b[1] - a[1])
                         .slice(0, 8)
@@ -423,7 +424,7 @@ export function buildLayerOverviews(report: AssessmentReportInput): Record<Asses
                 },
                 {
                     title: 'Catalog status of returned entries',
-                    description: 'Recorded status; confirm current availability with DOST.',
+                    description: 'As recorded in the catalog.',
                     rows: [...statuses].map(([label, value]) => ({ label, value })),
                 },
             ],
@@ -450,7 +451,7 @@ export function buildLayerOverviews(report: AssessmentReportInput): Record<Asses
             charts: [
                 {
                     title: 'Highest candidate relevance',
-                    description: 'Top six distinct options /100, using each option’s best match. Relevance is not a success rate.',
+                    description: 'Top 6 options /100 (match strength, not success rate).',
                     maximum: 100,
                     rows: leading.slice(0, 6).map((row) => ({
                         label: reportText(row.name),
@@ -460,7 +461,7 @@ export function buildLayerOverviews(report: AssessmentReportInput): Record<Asses
                 },
                 {
                     title: 'Needs with a catalog option',
-                    description: 'Share of evaluated needs with at least one option; this does not measure service coverage.',
+                    description: 'Needs with at least one matched option.',
                     maximum: 100,
                     rows: Object.entries(sectorNames).map(([sector, label]) => {
                         const total = matches.filter((row) => row.domain === sector).length;
@@ -474,7 +475,7 @@ export function buildLayerOverviews(report: AssessmentReportInput): Record<Asses
                 },
                 {
                     title: 'Recorded local laboratory capabilities',
-                    description: 'Service entries grouped by description keywords. Confirm required tests with a laboratory.',
+                    description: 'Lab services grouped by type.',
                     rows: Object.entries({
                         microbiological_and_food_safety: 'Food safety & microbiology',
                         chemical_and_physicochemical: 'Chemical testing',

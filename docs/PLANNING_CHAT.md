@@ -1,6 +1,6 @@
-# Ask me! planning assistant
+# GeoAgent planning assistant
 
-Click **Ask me!** in either sidebar or the always-visible lower-right floating button to open the messenger. It uses the municipality selected in the page URL, or lets you search municipalities by name/province. Province and barangay screens require a municipality selection before planning.
+Click **Talk to GeoAgent** in either sidebar or the always-visible lower-right floating button to open the messenger. It uses the municipality selected in the page URL, or lets you search municipalities by name/province. Province and barangay screens require a municipality selection before planning.
 
 The action plan's focus is **matching DOST catalog technologies/programs to a selected location**, explaining each match, then planning deployment of those technologies. It is not a generic municipal development plan. Each proposed assignment identifies the actual technology, catalog reference, target municipality and supporting local need. Historical project titles are background evidence, not deployable technology assignments. Exact barangay/host sites require technology-specific validation; general priority rankings alone do not establish a fit.
 

@@ -11,6 +11,7 @@ use App\Support\Assessment\IndicatorCatalog;
 use App\Support\Assessment\MunicipalityAssessmentData;
 use App\Support\Assessment\MunicipalityProfileService;
 use App\Support\Assessment\ProjectCatalog;
+use App\Support\Assessment\TargetAreaRanking;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -108,6 +109,7 @@ class MapAssessmentReport
                 'population_statistics' => $profile['population_statistics'] ?? null,
             ],
             'municipalityProfile' => $profile,
+            'targetAreas' => $locationModel instanceof Province ? app(TargetAreaRanking::class)->forProvince($locationModel) : null,
             'functionToolsBundle' => app(AssessmentFunctionTools::class)->computeLocationBundle($locationModel, includeActionPlan: false),
             'layerEResult' => null,
             'barangayAssessment' => null,

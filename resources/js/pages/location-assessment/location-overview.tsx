@@ -1,7 +1,8 @@
 import { Card, CardContent } from '@/components/ui/card';
 import type { AssessmentPageProps } from './types';
 
-export function LocationOverviewBar({ location, populationYear }: { location: AssessmentPageProps['location']; populationYear: number | null }) {
+/** Key facts grid (no card), used inside the assessment header. */
+export function LocationFacts({ location, populationYear }: { location: AssessmentPageProps['location']; populationYear: number | null }) {
     const populationLabel = populationYear === null ? 'Population' : `Population (${populationYear})`;
     const popStats = location.population_statistics;
     const brgyCounts = location.barangay_counts;
@@ -61,17 +62,23 @@ export function LocationOverviewBar({ location, populationYear }: { location: As
     ];
 
     return (
+        <dl className="grid min-w-0 grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 xl:grid-cols-6">
+            {items.map(([label, value, subtext]) => (
+                <div key={label} className="flex min-w-0 flex-col gap-0.5">
+                    <dt className="text-muted-foreground text-[10px] tracking-wide uppercase">{label}</dt>
+                    <dd className="text-sm font-semibold break-words text-slate-900 dark:text-slate-100">{value}</dd>
+                    {subtext && <dd className="text-muted-foreground text-[11px]">{subtext}</dd>}
+                </div>
+            ))}
+        </dl>
+    );
+}
+
+export function LocationOverviewBar({ location, populationYear }: { location: AssessmentPageProps['location']; populationYear: number | null }) {
+    return (
         <Card className="rounded-2xl shadow-[0_4px_20px_-8px_#153d3824]">
             <CardContent className="p-4 sm:p-5">
-                <div className="grid min-w-0 grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
-                    {items.map(([label, value, subtext]) => (
-                        <div key={label} className="flex flex-col gap-0.5">
-                            <span className="text-muted-foreground text-[11px] tracking-wide uppercase">{label}</span>
-                            <span className="text-sm font-semibold break-words">{value}</span>
-                            {subtext && <span className="text-muted-foreground text-[11px]">{subtext}</span>}
-                        </div>
-                    ))}
-                </div>
+                <LocationFacts location={location} populationYear={populationYear} />
             </CardContent>
         </Card>
     );

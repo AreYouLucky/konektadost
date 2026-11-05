@@ -22,7 +22,73 @@ export interface AssignmentDiagram {
     }[];
 }
 
-export type PlanningVisual = BarVisual | AssignmentDiagram;
+export interface ComparisonVisual {
+    type: 'comparison';
+    title: string;
+    caption: string;
+    source_tool: string;
+    locations: { a: string; b: string };
+    rows: { label: string; unit: string; a: number | null; b: number | null; reference: number | null; better: 'a' | 'b' | null }[];
+}
+
+export type PlanningVisual = BarVisual | AssignmentDiagram | ComparisonVisual;
+
+const fmt = (value: number | null) => (value == null ? '—' : value.toLocaleString('en-PH', { maximumFractionDigits: 2 }));
+
+/** Paired bars per indicator (shared scale per row) with a national-reference tick. */
+function ComparisonChart({ visual }: { visual: ComparisonVisual }) {
+    const series = [
+        { key: 'a' as const, name: visual.locations.a, color: 'var(--series-1)' },
+        { key: 'b' as const, name: visual.locations.b, color: 'var(--series-2)' },
+    ];
+    return (
+        <div className="viz-palette space-y-3">
+            <ul className="flex flex-wrap gap-3 text-[11px] text-slate-600 dark:text-slate-300">
+                {series.map((item) => (
+                    <li key={item.key} className="flex items-center gap-1.5">
+                        <span className="size-2.5 rounded-sm" style={{ backgroundColor: item.color }} aria-hidden="true" /> {item.name}
+                    </li>
+                ))}
+                <li className="flex items-center gap-1.5">
+                    <span className="inline-block h-3 border-l-2 border-slate-500" aria-hidden="true" /> National reference
+                </li>
+            </ul>
+            {visual.rows.map((row) => {
+                const max = Math.max(row.a ?? 0, row.b ?? 0, row.reference ?? 0, 1e-9);
+                return (
+                    <div key={row.label}>
+                        <p className="mb-1 text-[11px] font-medium text-slate-700 dark:text-slate-200">
+                            {row.label} <span className="font-normal text-slate-400">· {row.unit}</span>
+                        </p>
+                        {series.map((item) => (
+                            <div key={item.key} className="grid grid-cols-[minmax(0,1fr)_4.5rem] items-center gap-2">
+                                <span className="relative h-2.5 rounded-full bg-slate-100 dark:bg-slate-800">
+                                    {row[item.key] != null && (
+                                        <span
+                                            className="absolute inset-y-0 left-0 rounded-full"
+                                            style={{ width: `${Math.max(1, ((row[item.key] ?? 0) / max) * 100)}%`, backgroundColor: item.color }}
+                                        />
+                                    )}
+                                    {row.reference != null && (
+                                        <span
+                                            className="absolute -inset-y-0.5 w-0.5 bg-slate-500"
+                                            style={{ left: `${(row.reference / max) * 100}%` }}
+                                        />
+                                    )}
+                                </span>
+                                <span className="text-right font-mono text-[10px] tabular-nums">
+                                    {fmt(row[item.key])}
+                                    {row.better === item.key ? ' ✓' : ''}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                );
+            })}
+            <p className="text-[10px] text-slate-500">✓ = better served on recorded data.</p>
+        </div>
+    );
+}
 
 export default function PlanningVisuals({ visuals, expanded = false }: { visuals?: PlanningVisual[]; expanded?: boolean }) {
     if (!visuals?.length) return null;
@@ -30,7 +96,7 @@ export default function PlanningVisuals({ visuals, expanded = false }: { visuals
     return (
         <section
             aria-label="Evidence graphs and technology assignment diagrams"
-            className={expanded ? 'mt-5 grid min-w-0 items-start gap-4 lg:grid-cols-2' : 'mt-4 min-w-0 space-y-2'}
+            className={expanded ? 'mt-5 grid min-w-0 gap-4 lg:grid-cols-2' : 'mt-4 min-w-0 space-y-2'}
         >
             <h4 className="col-span-full flex items-center gap-1.5 text-xs font-semibold text-[#087dcc]">
                 <BarChart3 className="size-3.5" aria-hidden="true" /> Graphs &amp; assignment diagrams
@@ -42,6 +108,8 @@ export default function PlanningVisuals({ visuals, expanded = false }: { visuals
                             <ScoreChart visual={visual} />
                         ) : visual.type === 'assignment_diagram' ? (
                             <AssignmentFlows visual={visual} />
+                        ) : visual.type === 'comparison' ? (
+                            <ComparisonChart visual={visual} />
                         ) : null}
                         <figcaption className="mt-2 text-[10px] leading-relaxed text-slate-500">
                             {visual.caption}

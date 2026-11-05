@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\SearchMapController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\LocationRoadsController;
 use App\Http\Controllers\PlanningChatController;
+use App\Http\Controllers\UserDashboardController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -17,9 +18,7 @@ Route::get('/', function () {
 })->name('home');
 
 Route::middleware(['auth'])->group(function () {
-    Route::get('dashboard', function () {
-        return Inertia::render('dashboard');
-    })->name('user.dashboard.index');
+    Route::get('dashboard', UserDashboardController::class)->name('user.dashboard.index');
 
     Route::get('location', [LocationController::class, 'show'])->name('location.show');
     Route::get('location/assess', [LocationController::class, 'assess'])->name('location.assess');

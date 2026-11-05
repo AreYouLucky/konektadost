@@ -15,7 +15,7 @@ import {
     SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { Link, usePage } from '@inertiajs/react';
-import { ArrowUpRight, ChevronRight, Globe2, LayoutGrid, MapPin, MapPinned, UserRound } from 'lucide-react';
+import { ArrowUpRight, ChevronRight, Globe2, LayoutGrid, MapPin, UserRound } from 'lucide-react';
 
 /**
  * Sidebar for standard (non-admin) users.
@@ -31,7 +31,7 @@ export function AppSidebar() {
     const workspaceItems = [
         { title: 'Dashboard', href: '/dashboard', icon: LayoutGrid },
         { title: 'Intelligence Map', href: mapUrl, path: '/intelligence-map', icon: Globe2 },
-        { title: 'Service Area Map', href: '/location', icon: MapPinned },
+        // Service Area Map (/location) is hidden from the user workspace; the route stays available.
     ];
 
     return (
@@ -75,8 +75,9 @@ export function AppSidebar() {
                     </SidebarGroupLabel>
                     <SidebarMenu className="gap-1.5">
                         {workspaceItems.map((item) => {
+                            // Assessments are opened from the intelligence map, so it stays highlighted there.
                             const active =
-                                currentPath === (item.path ?? item.href) || (item.href === '/location' && currentPath === '/location/assess');
+                                currentPath === (item.path ?? item.href) || (item.path === '/intelligence-map' && currentPath === '/location/assess');
                             return (
                                 <SidebarMenuItem key={item.href}>
                                     <SidebarMenuButton

@@ -9,12 +9,11 @@ import SourceBasisModal from './source-basis-modal';
 import type { BarangayAssessmentSummary, BarangayItem } from './types';
 
 export function BarangayPrioritySection({
-    cityName,
     summary,
     barangays,
     populationYear,
 }: {
-    cityName: string;
+    cityName?: string;
     summary: BarangayAssessmentSummary;
     barangays: BarangayItem[];
     populationYear: number | null;
@@ -71,16 +70,6 @@ export function BarangayPrioritySection({
 
     return (
         <section className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="font-mono text-xs">
-                        Step 2
-                    </Badge>
-                    <h2 className="text-lg font-semibold tracking-tight">Barangay priorities ({cityName})</h2>
-                </div>
-                <p className="text-muted-foreground text-sm">Compare barangays by computed priority and recorded services.</p>
-            </div>
-
             <Card>
                 <CardHeader className="flex flex-col flex-wrap gap-4 pb-4 xl:flex-row xl:items-center xl:justify-between">
                     <div className="flex flex-wrap items-center gap-2">

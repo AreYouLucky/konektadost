@@ -154,7 +154,7 @@ export function RoadAccessibilityCard({ roadAccessibility }: { roadAccessibility
     const length = usable ? reportNumber(summary.total_road_length_km ?? road.total_length_km) : null;
     const density = usable ? reportNumber(summary.road_density_km_per_km2 ?? road.road_density_km_per_km2) : null;
     return (
-        <section className="min-w-0 space-y-3 rounded-xl border border-sky-100 bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
+        <section className="min-w-0 space-y-3 rounded-2xl border border-sky-100 bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
             <h3 className="text-sm font-semibold text-[#087dcc]">Road access</h3>
             <dl className="grid grid-cols-3 gap-3 text-xs">
                 {[
@@ -185,7 +185,7 @@ export function TelecomConnectivityCard({ telecom }: { telecom?: unknown }) {
     const fiveG = usable ? reportNumber(summary.sites_with_5g) : null;
     const share = usable ? reportNumber(summary.share_5g_pct) : null;
     return (
-        <section className="min-w-0 space-y-3 rounded-xl border border-sky-100 bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
+        <section className="min-w-0 space-y-3 rounded-2xl border border-sky-100 bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
             <h3 className="text-sm font-semibold text-[#087dcc]">Connectivity inventory</h3>
             <dl className="grid grid-cols-3 gap-3 text-xs">
                 {[

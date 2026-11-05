@@ -111,7 +111,7 @@ export default function AssessmentAiAnalysis({ state, retry, mode }: { state: Ai
     return (
         <section
             aria-label={`AI ${mode} analysis`}
-            className="min-w-0 rounded-xl border border-blue-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950"
+            className="min-w-0 rounded-2xl border border-sky-100 bg-white p-4 sm:p-5 dark:border-slate-800 dark:bg-slate-950"
         >
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="flex items-center gap-2 text-base font-semibold text-[#087dcc] dark:text-blue-200">

@@ -91,6 +91,33 @@ class PlanningConversationVisuals
                 'General barangay priority scores, not technology-specific suitability. Do not assign a technology to a barangay from this ranking alone.');
         }
 
+        if (isset($results['compare_locations']['indicators'], $results['compare_locations']['locations'])) {
+            $comparison = $results['compare_locations'];
+            $rows = [];
+            foreach ($comparison['indicators'] as $row) {
+                if (is_numeric($row['a'] ?? null) || is_numeric($row['b'] ?? null)) {
+                    $rows[] = [
+                        'label' => (string) ($row['label'] ?? $row['key'] ?? 'Indicator'), 'unit' => (string) ($row['unit'] ?? ''),
+                        'a' => is_numeric($row['a'] ?? null) ? (float) $row['a'] : null,
+                        'b' => is_numeric($row['b'] ?? null) ? (float) $row['b'] : null,
+                        'reference' => is_numeric($row['national_reference'] ?? null) ? (float) $row['national_reference'] : null,
+                        'better' => in_array($row['better_served'] ?? null, ['a', 'b'], true) ? $row['better_served'] : null,
+                    ];
+                }
+            }
+            if ($rows !== []) {
+                $visuals[] = [
+                    'type' => 'comparison', 'title' => 'Location comparison', 'source_tool' => 'compare_locations',
+                    'locations' => [
+                        'a' => (string) ($comparison['locations']['a']['name'] ?? $municipality->name),
+                        'b' => (string) ($comparison['locations']['b']['name'] ?? 'Other location'),
+                    ],
+                    'rows' => array_slice($rows, 0, 12),
+                    'caption' => 'Same formulas and national references for both. Bars share a scale per indicator; the tick marks the national reference. Missing records are not zero.',
+                ];
+            }
+        }
+
         return $visuals;
     }
 

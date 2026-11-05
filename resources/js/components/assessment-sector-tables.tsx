@@ -112,8 +112,7 @@ export function GapSectorTable({
     const diagnostics = (detectedGaps.sector_diagnostics ?? []).filter((row) => row.gap_count === 0 && (sector === 'all' || row.sector === sector));
     return (
         <section className="min-w-0 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-lg font-semibold text-[#087dcc]">Development gaps ({detectedGaps.total_gaps_detected})</h2>
+            <div className="flex flex-wrap items-center justify-end gap-3">
                 <SectorSelect name="Development gaps sector" value={sector} onChange={setSector} />
             </div>
             <p className="text-muted-foreground text-xs">
@@ -298,8 +297,7 @@ export function InterventionSectorTable({
     const displayRows = [...rows, ...unmatched];
     return (
         <section className="min-w-0 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-lg font-semibold text-[#087dcc]">STI interventions by sector</h2>
+            <div className="flex flex-wrap items-center justify-end gap-3">
                 <SectorSelect name="Intervention sector" value={sector} onChange={setSector} />
             </div>
             <p className="text-muted-foreground text-xs">

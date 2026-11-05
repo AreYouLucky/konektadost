@@ -4,7 +4,7 @@ import type { AssessmentReportInput } from '@/lib/assessment-report';
 export default function AssessmentDataAttribution({ report }: { report: AssessmentReportInput }) {
     return (
         <section aria-labelledby="assessment-data-sources" className="min-w-0 space-y-3">
-            <h2 id="assessment-data-sources" className="text-lg font-semibold text-[#087dcc]">
+            <h2 id="assessment-data-sources" className="sr-only">
                 Data sources &amp; attribution
             </h2>
             <p className="text-muted-foreground text-xs">

@@ -1,7 +1,7 @@
 import PlanningActionPlan from '@/components/planning-action-plan';
 import PlanningVisuals, { type PlanningVisual } from '@/components/planning-visuals';
 import { SidebarMenuButton, useSidebar } from '@/components/ui/sidebar';
-import { isPlanningActionPlan } from '@/lib/planning-plan';
+import { isPlanningActionPlan, stripToolCitations } from '@/lib/planning-plan';
 import type { SharedData } from '@/types';
 import { usePage } from '@inertiajs/react';
 import * as Dialog from '@radix-ui/react-dialog';
@@ -20,6 +20,7 @@ import {
     Search,
     Send,
     Sparkles,
+    Square,
     X,
 } from 'lucide-react';
 import { createContext, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
@@ -80,7 +81,7 @@ function PlanningReply({ message, location }: { message: Message; location: Muni
         );
     return (
         <>
-            <div className="break-words whitespace-pre-wrap">{message.content}</div>
+            <div className="break-words whitespace-pre-wrap">{stripToolCitations(message.content)}</div>
             <PlanningVisuals visuals={message.visuals} />
         </>
     );
@@ -159,11 +160,11 @@ export function PlanningChatProvider({ children }: { children: ReactNode }) {
                     type="button"
                     onClick={show}
                     className="fixed right-5 bottom-5 z-[60] flex items-center gap-2 rounded-full bg-[#087dcc] px-5 py-3 text-sm font-semibold text-white shadow-xl hover:bg-[#0666a8] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-500"
-                    aria-label={minimized ? 'Reopen Ask me! assistant' : 'Open Ask me! assistant'}
+                    aria-label={minimized ? 'Reopen GeoAgent' : 'Talk to GeoAgent'}
                     aria-haspopup="dialog"
                     data-planning-chat-launcher="floating"
                 >
-                    <MessageCircle className="size-5" aria-hidden="true" /> Ask me!
+                    <MessageCircle className="size-5" aria-hidden="true" /> Talk to GeoAgent
                 </button>
             )}
         </ChatContext.Provider>
@@ -177,18 +178,18 @@ export function PlanningChatLauncher() {
 
     return (
         <SidebarMenuButton
-            tooltip="Ask me!"
+            tooltip="Talk to GeoAgent"
             onClick={() => {
                 setOpenMobile(false);
                 chat.show();
             }}
-            aria-label="Ask me! Open AI planning assistant"
+            aria-label="Talk to GeoAgent, the AI planning assistant"
             aria-haspopup="dialog"
             aria-expanded={chat.open}
             className="h-11 cursor-pointer rounded-xl px-3 text-[13px] font-semibold text-[#087dcc] hover:bg-blue-50 hover:text-[#0666a8] [&>svg]:size-[18px]"
         >
             <MessageCircle strokeWidth={1.8} aria-hidden="true" />
-            <span>Ask me!</span>
+            <span>Talk to GeoAgent</span>
             <Sparkles className="ml-auto size-3.5! group-data-[collapsible=icon]:hidden" aria-hidden="true" />
         </SidebarMenuButton>
     );
@@ -270,6 +271,7 @@ function PlanningChatWindow({
     const scrollArea = useRef<HTMLDivElement>(null);
     const prependScroll = useRef<{ height: number; top: number } | null>(null);
     const pending = useRef<AbortController | null>(null);
+    const cancelled = useRef(false);
     const lastAttempt = useRef<{ message: string; id: string } | null>(null);
     const currentKey = scope ? queryString(scope) : null;
 
@@ -371,6 +373,7 @@ function PlanningChatWindow({
         if (lastAttempt.current?.message !== message) lastAttempt.current = { message, id: requestUuid() };
         const requestId = lastAttempt.current.id;
         pending.current = controller;
+        cancelled.current = false;
         setBusy(true);
         setError(null);
         setDraft('');
@@ -396,11 +399,13 @@ function PlanningChatWindow({
             setMessages(before);
             setDraft(message);
             setError(
-                controller.signal.aborted
-                    ? 'The reply timed out. Reopen the chat to check whether it completed before retrying.'
-                    : cause instanceof Error
-                      ? cause.message
-                      : 'Could not send this message. Please retry.',
+                cancelled.current
+                    ? 'Stopped. Your message is back in the box. If GeoAgent had already finished, the reply appears when you reopen the chat; resending the same message reuses it.'
+                    : controller.signal.aborted
+                      ? 'The reply timed out. Reopen the chat to check whether it completed before retrying.'
+                      : cause instanceof Error
+                        ? cause.message
+                        : 'Could not send this message. Please retry.',
             );
             // Refresh authoritative history after a network failure; the server may have completed the turn.
             loaded.current = null;
@@ -410,6 +415,13 @@ function PlanningChatWindow({
             pending.current = null;
             composer.current?.focus();
         }
+    }
+
+    /** Stop waiting for the current reply (client-side abort). */
+    function cancelSend() {
+        if (!pending.current) return;
+        cancelled.current = true;
+        pending.current.abort();
     }
 
     async function resetConversation() {
@@ -533,7 +545,7 @@ function PlanningChatWindow({
                             <MessageCircle className="size-5" aria-hidden="true" />
                         </div>
                         <div className="min-w-0 flex-1">
-                            <Dialog.Title className="text-base font-semibold">Ask me!</Dialog.Title>
+                            <Dialog.Title className="text-base font-semibold">GeoAgent</Dialog.Title>
                             <Dialog.Description id="planning-chat-description" className="text-[11px] text-blue-100">
                                 DOST technology-to-location planning
                             </Dialog.Description>
@@ -705,7 +717,8 @@ function PlanningChatWindow({
                                     </button>
                                 )}
                                 <div className="mb-4 max-w-[95%] rounded-2xl rounded-bl-sm border border-blue-100 bg-white p-3 text-sm leading-relaxed dark:border-slate-700 dark:bg-slate-900">
-                                    Hi! I can match DOST technologies to a location and build their deployment action plan.{' '}
+                                    Hi, I'm GeoAgent! I match DOST technologies to a location, rank where to deploy them, compare locations and draft
+                                    the action plan.{' '}
                                     {location
                                         ? `Which technology or local need should we explore for ${location.name}?`
                                         : 'Choose a municipality above to get started.'}
@@ -749,7 +762,7 @@ function PlanningChatWindow({
                                                     <button
                                                         type="button"
                                                         aria-label="Copy assistant reply"
-                                                        onClick={() => void copyReply(message.content, index)}
+                                                        onClick={() => void copyReply(stripToolCitations(message.content), index)}
                                                         className="flex items-center gap-1 rounded text-[10px] text-slate-500 hover:text-[#087dcc]"
                                                     >
                                                         {copied === index ? <Check className="size-3" /> : <Copy className="size-3" />}
@@ -780,12 +793,16 @@ function PlanningChatWindow({
                                 {busy && (
                                     <p role="status" className="flex items-center gap-2 text-xs text-slate-500">
                                         <LoaderCircle className="size-4 animate-spin text-[#087dcc]" /> Reviewing your request and local evidence…
+                                        <button type="button" onClick={cancelSend} className="ml-auto font-semibold text-[#087dcc] hover:underline">
+                                            Cancel
+                                        </button>
                                     </p>
                                 )}
                                 {!messages.length && location && !loading && !busy && (
                                     <div className="flex flex-wrap gap-2">
                                         {[
                                             'Match DOST technologies to this location',
+                                            'Which top 5 barangays should we target first, and with which technology?',
                                             'Create a technology assignment action plan',
                                             'Show technology match scores and deployment diagram',
                                         ].map((prompt) => (
@@ -836,6 +853,35 @@ function PlanningChatWindow({
                                 )}
                             </div>
                         )}
+                        {location && view === 'chat' && configured && (
+                            <div className="mb-2 flex flex-wrap gap-1.5" aria-label="Quick actions">
+                                {[
+                                    { label: 'Compare with…', text: `Compare ${location.name} with `, send: false },
+                                    {
+                                        label: 'Top 10 barangays',
+                                        text: 'Rank the top 10 barangays to target, with the reason and best-fit DOST technology for each.',
+                                        send: true,
+                                    },
+                                    { label: 'Draft action plan', text: 'Create a technology assignment action plan', send: true },
+                                ].map((action) => (
+                                    <button
+                                        key={action.label}
+                                        type="button"
+                                        disabled={busy || loading || choosing}
+                                        onClick={() => {
+                                            if (action.send) void send(action.text);
+                                            else {
+                                                setDraft(action.text);
+                                                composer.current?.focus();
+                                            }
+                                        }}
+                                        className="rounded-full border border-blue-200 bg-blue-50/60 px-2.5 py-1 text-[11px] font-medium text-[#087dcc] hover:bg-blue-100 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900"
+                                    >
+                                        {action.label}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                         <form
                             onSubmit={submit}
                             className="flex items-end gap-2 rounded-xl border border-slate-200 p-2 focus-within:border-blue-400 dark:border-slate-700"
@@ -859,24 +905,36 @@ function PlanningChatWindow({
                                 }
                                 className="max-h-28 min-h-11 flex-1 resize-none bg-transparent p-1 text-sm outline-none disabled:opacity-50"
                             />
-                            <button
-                                type="submit"
-                                aria-label="Send message"
-                                disabled={
-                                    !draft.trim() ||
-                                    !location ||
-                                    loading ||
-                                    busy ||
-                                    resetting ||
-                                    savingMessage !== null ||
-                                    !configured ||
-                                    choosing ||
-                                    view !== 'chat'
-                                }
-                                className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#087dcc] text-white hover:bg-[#0666a8] disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                                {busy ? <LoaderCircle className="size-4 animate-spin" /> : <Send className="size-4" />}
-                            </button>
+                            {busy ? (
+                                <button
+                                    type="button"
+                                    onClick={cancelSend}
+                                    aria-label="Stop GeoAgent"
+                                    title="Stop"
+                                    className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-slate-700 text-white hover:bg-slate-900 dark:bg-slate-200 dark:text-slate-900"
+                                >
+                                    <Square className="size-3.5 fill-current" />
+                                </button>
+                            ) : (
+                                <button
+                                    type="submit"
+                                    aria-label="Send message"
+                                    disabled={
+                                        !draft.trim() ||
+                                        !location ||
+                                        loading ||
+                                        busy ||
+                                        resetting ||
+                                        savingMessage !== null ||
+                                        !configured ||
+                                        choosing ||
+                                        view !== 'chat'
+                                    }
+                                    className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#087dcc] text-white hover:bg-[#0666a8] disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                    <Send className="size-4" />
+                                </button>
+                            )}
                         </form>
                         <p className="mt-1.5 px-1 text-[10px] text-slate-400">
                             Chats and plan versions are saved to your account. AI uses recent exchanges and the latest saved plan.

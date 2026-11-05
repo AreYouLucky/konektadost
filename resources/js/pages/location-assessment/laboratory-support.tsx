@@ -7,7 +7,6 @@ export default function LaboratorySupport({ report }: { report: AssessmentPagePr
     const options = reportLaboratoryOptions(report);
     return (
         <section aria-label="Laboratory support" className="min-w-0 space-y-3">
-            <h2 className="text-lg font-semibold text-[#087dcc]">Laboratory support</h2>
             {options.conflict ? (
                 <p className="text-sm">Validate conflicting laboratory locations before choosing a partner.</p>
             ) : options.local.length ? (
