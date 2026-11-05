@@ -6,14 +6,13 @@ use App\FunctionTools\Contracts\FunctionToolInterface;
 use App\FunctionTools\LayerC\DetectDevelopmentGapsTool;
 use App\FunctionTools\LayerD\SearchDostTechnologiesTool;
 use App\FunctionTools\Support\LocationResolver;
-use App\Models\AgricultureCountEstimate;
 use App\Models\DostProject;
 use App\Models\DostTech;
-use App\Models\Facility;
 use App\Models\Municipality;
 use App\Models\Technology;
 use App\Models\TelecomSite;
 use App\Support\Assessment\GapAssessmentDiagnostics;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -44,14 +43,14 @@ class MatchDostInterventionsTool implements FunctionToolInterface
 
     public function description(): string
     {
-        return 'Match identified municipal development gaps with potential DOST technologies and STI interventions using deterministic sector alignment, beneficiary fit, local resource synergy, and verified catalog availability.';
+        return 'Match development gaps for a selected province, municipality, or barangay with potential DOST technologies and STI interventions using deterministic sector alignment, beneficiary fit, local resource synergy, and verified catalog availability.';
     }
 
     public function parameters(): array
     {
         return [
             'type' => 'object',
-            'properties' => [
+            'properties' => LocationResolver::locationParameterSchema()['properties'] + [
                 'municipality_id' => [
                     'type' => 'integer',
                     'description' => 'Target municipality numeric ID.',
@@ -99,9 +98,9 @@ class MatchDostInterventionsTool implements FunctionToolInterface
 
         // 1. Resolve gaps: use provided or run DetectDevelopmentGapsTool
         $gaps = $args['gaps'] ?? null;
-        if (!is_array($gaps) || empty($gaps)) {
+        if (!is_array($gaps)) {
             $gapDetector = app(DetectDevelopmentGapsTool::class);
-            $gapResult = $gapDetector->execute(['municipality_id' => $municipality->id]);
+            $gapResult = $gapDetector->forLocation($municipality);
             $gaps = $gapResult['gaps'] ?? [];
         }
 
@@ -147,13 +146,16 @@ class MatchDostInterventionsTool implements FunctionToolInterface
         }
 
         return [
-            'municipality' => [
+            'location_level' => LocationResolver::levelOf($municipality),
+            'location_id' => (int) $municipality->id,
+            'location_name' => LocationResolver::nameOf($municipality),
+            'municipality' => $municipality instanceof Municipality ? [
                 'id' => $municipality->id,
                 'psg_code' => $municipality->psg_code,
-                'name' => $municipality->name,
+                'name' => LocationResolver::nameOf($municipality),
                 'province' => $municipality->province_name,
                 'income_class' => $municipality->placeDescription?->income_class ?? 'Unclassified',
-            ],
+            ] : null,
             'total_gaps_evaluated' => count($gaps),
             'total_gaps_with_matches' => count(array_filter($gapMatches, fn ($m) => !empty($m['matched_interventions']))),
             'total_interventions_matched' => $totalInterventionsMatched,
@@ -164,20 +166,19 @@ class MatchDostInterventionsTool implements FunctionToolInterface
     /**
      * Gathers quick local asset context (facility counts, agriculture commodities, telecom presence).
      */
-    protected function gatherLocalContext(Municipality $municipality): array
+    protected function gatherLocalContext(Model $municipality): array
     {
+        $datasets = app(\App\FunctionTools\LayerA\GetAvailableDatasetsTool::class);
         $hasFacilities = Schema::hasTable('facilities');
-        $healthFacilityCount = $hasFacilities ? Facility::where('municipality_id', $municipality->id)->where('sector', 'health')->count() : null;
-        $educationFacilityCount = $hasFacilities ? Facility::where('municipality_id', $municipality->id)->where('sector', 'education')->count() : null;
-        $safetyFacilityCount = $hasFacilities ? Facility::where('municipality_id', $municipality->id)->where('sector', 'safety')->count() : null;
+        $healthFacilityCount = $hasFacilities ? $datasets->facilityQueryFor($municipality)->where('sector', 'health')->count() : null;
+        $educationFacilityCount = $hasFacilities ? $datasets->facilityQueryFor($municipality)->where('sector', 'education')->count() : null;
+        $safetyFacilityCount = $hasFacilities ? $datasets->facilityQueryFor($municipality)->where('sector', 'safety')->count() : null;
         $telecomCount = Schema::hasTable('telecom_sites')
             ? app(\App\FunctionTools\LayerA\GetAvailableDatasetsTool::class)->telecomQueryFor($municipality)->count() : null;
 
         $agricultureCommodities = [];
         if (Schema::hasTable('agriculture_count_estimates')) {
-            $munIds = [$municipality->id];
-            $agricultureCommodities = AgricultureCountEstimate::query()
-                ->whereIn('municipality_id', $munIds)
+            $agricultureCommodities = $datasets->agricultureQueryFor($municipality)
                 ->distinct()
                 ->pluck('commodity_name')
                 ->take(10)
@@ -196,7 +197,7 @@ class MatchDostInterventionsTool implements FunctionToolInterface
     /**
      * Matches a single development gap against available DOST technologies.
      */
-    protected function findInterventionsForGap(array $gap, Municipality $municipality, array $localContext): array
+    protected function findInterventionsForGap(array $gap, Model $municipality, array $localContext): array
     {
         $domain = $gap['domain'] ?? '';
         $gapKeywords = $this->getDomainKeywords($domain, $gap['gap_name'] ?? '');
@@ -219,6 +220,7 @@ class MatchDostInterventionsTool implements FunctionToolInterface
                     'agency' => $tech->agency ?? 'DOST',
                     'sector' => $tech->category ?? 'General STI',
                     'relevance_score' => $score['relevance_score'],
+                    'score_breakdown' => $score['score_breakdown'],
                     'matching_criteria' => $score['matching_criteria'],
                     'evidence' => [
                         'source' => 'technologies table',
@@ -247,6 +249,7 @@ class MatchDostInterventionsTool implements FunctionToolInterface
                     'agency' => $dtech->agency ?? 'DOST',
                     'sector' => $dtech->sector ?? 'DOST Program',
                     'relevance_score' => $score['relevance_score'],
+                    'score_breakdown' => $score['score_breakdown'],
                     'matching_criteria' => $score['matching_criteria'],
                     'evidence' => [
                         'source' => 'dost_techs table',
@@ -285,6 +288,7 @@ class MatchDostInterventionsTool implements FunctionToolInterface
                     'agency' => $proj->agency ?? 'DOST',
                     'sector' => $proj->sector ?? 'DOST Project',
                     'relevance_score' => $score['relevance_score'],
+                    'score_breakdown' => $score['score_breakdown'],
                     'matching_criteria' => $score['matching_criteria'],
                     'evidence' => [
                         'source' => 'dost_projects table',
@@ -350,6 +354,7 @@ class MatchDostInterventionsTool implements FunctionToolInterface
     protected function evaluateTechnologyRelevance(Technology $tech, string $domain, array $domainSectors, array $keywords, array $localContext): array
     {
         $score = 20; // baseline
+        $breakdown = ['base' => 20, 'sector' => 0, 'keywords' => 0, 'local_assets' => 0, 'status' => 0, 'cap' => 100, 'threshold' => 40];
         $criteria = [];
 
         $category = $tech->category ?? '';
@@ -359,6 +364,7 @@ class MatchDostInterventionsTool implements FunctionToolInterface
         foreach ($domainSectors as $sec) {
             if (strcasecmp($category, $sec) === 0 || str_contains(strtolower($category), strtolower($sec))) {
                 $score += 35;
+                $breakdown['sector'] = 35;
                 $criteria[] = "Direct category alignment: '{$category}' corresponds to {$domain} needs";
                 break;
             }
@@ -374,29 +380,35 @@ class MatchDostInterventionsTool implements FunctionToolInterface
         if (!empty($matchedKeywords)) {
             $keywordBonus = min(25, count($matchedKeywords) * 8);
             $score += $keywordBonus;
+            $breakdown['keywords'] = $keywordBonus;
             $criteria[] = 'Keyword and concept overlap: ' . implode(', ', array_slice($matchedKeywords, 0, 4));
         }
 
         // 3. Local asset synergies
         if ($domain === 'education' && $localContext['education_facilities'] > 0) {
             $score += 15;
+            $breakdown['local_assets'] = 15;
             $criteria[] = "Local facility readiness: {$localContext['education_facilities']} schools present for deployment";
         } elseif ($domain === 'health' && $localContext['health_facilities'] > 0) {
             $score += 15;
+            $breakdown['local_assets'] = 15;
             $criteria[] = "Local health network: {$localContext['health_facilities']} health stations/clinics present";
         } elseif ($domain === 'agriculture' && !empty($localContext['agriculture_commodities'])) {
             $score += 15;
+            $breakdown['local_assets'] = 15;
             $criteria[] = 'Local crop alignment: matches recorded commodities (' . implode(', ', array_slice($localContext['agriculture_commodities'], 0, 3)) . ')';
         }
 
         // 4. Active status check
         if (in_array(strtolower($tech->active_status ?? ''), ['active', 'verified'])) {
             $score += 10;
+            $breakdown['status'] = 10;
             $criteria[] = 'Verified active catalog status';
         }
 
         return [
             'relevance_score' => min(100, $score),
+            'score_breakdown' => $breakdown,
             'matching_criteria' => $criteria,
         ];
     }
@@ -404,6 +416,7 @@ class MatchDostInterventionsTool implements FunctionToolInterface
     protected function evaluateDostTechRelevance(DostTech $tech, string $domain, array $domainSectors, array $keywords, array $localContext): array
     {
         $score = 20;
+        $breakdown = ['base' => 20, 'sector' => 0, 'keywords' => 0, 'local_assets' => 0, 'status' => 0, 'cap' => 100, 'threshold' => 40];
         $criteria = [];
 
         $sector = $tech->sector ?? '';
@@ -413,6 +426,7 @@ class MatchDostInterventionsTool implements FunctionToolInterface
         foreach ($domainSectors as $sec) {
             if (strcasecmp($sector, $sec) === 0 || str_contains(strtolower($sector), strtolower($sec))) {
                 $score += 35;
+                $breakdown['sector'] = 35;
                 $criteria[] = "Sector match: '{$sector}' aligns directly with {$domain}";
                 break;
             }
@@ -428,23 +442,27 @@ class MatchDostInterventionsTool implements FunctionToolInterface
         if (!empty($matchedKeywords)) {
             $keywordBonus = min(25, count($matchedKeywords) * 8);
             $score += $keywordBonus;
+            $breakdown['keywords'] = $keywordBonus;
             $criteria[] = 'Application overlap: ' . implode(', ', array_slice($matchedKeywords, 0, 4));
         }
 
         // 3. Local asset synergies
         if ($domain === 'agriculture' && !empty($localContext['agriculture_commodities'])) {
             $score += 15;
+            $breakdown['local_assets'] = 15;
             $criteria[] = 'Value-addition alignment for local agricultural production';
         }
 
         // 4. Status
         if (strtolower($tech->status ?? '') === 'active') {
             $score += 10;
+            $breakdown['status'] = 10;
             $criteria[] = 'Active technology deployment status';
         }
 
         return [
             'relevance_score' => min(100, $score),
+            'score_breakdown' => $breakdown,
             'matching_criteria' => $criteria,
         ];
     }
@@ -452,6 +470,7 @@ class MatchDostInterventionsTool implements FunctionToolInterface
     protected function evaluateProjectRelevance(DostProject $proj, string $domain, array $domainSectors, array $keywords, array $localContext): array
     {
         $score = 15;
+        $breakdown = ['base' => 15, 'sector' => 0, 'keywords' => 0, 'local_assets' => 0, 'status' => 0, 'cap' => 95, 'threshold' => 45];
         $criteria = [];
 
         $sector = $proj->sector ?? '';
@@ -460,6 +479,7 @@ class MatchDostInterventionsTool implements FunctionToolInterface
         foreach ($domainSectors as $sec) {
             if ($sector && str_contains(strtolower($sector), strtolower($sec))) {
                 $score += 30;
+                $breakdown['sector'] = 30;
                 $criteria[] = "Historical project sector alignment: '{$sector}'";
                 break;
             }
@@ -474,11 +494,13 @@ class MatchDostInterventionsTool implements FunctionToolInterface
         if (!empty($matchedKeywords)) {
             $keywordBonus = min(20, count($matchedKeywords) * 6);
             $score += $keywordBonus;
+            $breakdown['keywords'] = $keywordBonus;
             $criteria[] = 'Project scope alignment: ' . implode(', ', array_slice($matchedKeywords, 0, 3));
         }
 
         return [
             'relevance_score' => min(95, $score),
+            'score_breakdown' => $breakdown,
             'matching_criteria' => $criteria,
         ];
     }

@@ -40,6 +40,7 @@ final readonly class IndicatorResult
         public string $reason = '',
         public ?float $gap = null,
         public ?string $basisNote = null,
+        public ?array $calculation = null,
     ) {}
 
     public function isAvailable(): bool
@@ -93,6 +94,7 @@ final readonly class IndicatorResult
             'confidence' => $this->confidence,
             'reason' => $this->reason,
             'is_shortfall' => $this->isShortfall(),
+            'calculation' => $this->calculation,
         ];
     }
 }

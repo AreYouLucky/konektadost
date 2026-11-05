@@ -6,6 +6,10 @@ The action plan's focus is **matching DOST catalog technologies/programs to a se
 
 Ask questions, request a technology-assignment action plan, then refine it with a budget, timeframe or sector priority. Complete plans have the five executive outputs and a descriptive technology/location plan title. Complete drafts and revisions are saved automatically as separate versions; any earlier assistant reply can also be saved with **Save as plan**.
 
+Generated plans show **View large** and **Download PDF**. The large modal displays the full draft, the six-column activity matrix, stored graphs/assignment diagrams and source references; it includes its own download control. Opening a saved plan from the history/sidebar opens this viewer for that exact version. Escape closes the viewer and returns to the assistant. Downloads use landscape A4, searchable text, the same matrix headings as the supplied action-plan sample, repeated table headers and page numbers.
+
+New complete drafts and revisions include a sixth section, **Action Plan Matrix**, with Activities, Objectives, Results, Timeline, Budget/Resources, and Responsible Person/Office. The chatbot retains the user's budget/timeframe constraints and labels unconfirmed costs and roles. The viewer/PDF parse the stored matrix rather than substituting the assessment page's generic planning schedule. Older versions without a matrix keep their original text and show a revision note; they are not silently rewritten. Exports never query current assessment data or run a new AI request. Missing stored graphs remain unavailable, and retained-evidence captions are preserved.
+
 Both sidebars have a **Generated action plans** list showing each saved plan's name, municipality and version. Clicking an entry opens that exact saved version in the floating assistant. **Show more plans** provides access to all older records, across the account's municipalities.
 
 The assistant's **History** tab resumes previous conversations, and **Saved plans** opens earlier plan versions. **New conversation** archives the current chat without deleting its messages or plans. Chat history and saved plans remain available after logout and login. **Load earlier messages** retrieves older messages in batches of 40.
@@ -52,6 +56,7 @@ Surviving chats from the earlier file-cache version are imported once when that 
 
 - `PlanningChatController` authenticates/validates requests, resolves municipalities, and coordinates conversation history and locks.
 - `PlanningChatService` calls the OpenAI Responses API and dispatches approved functions through the existing `FunctionToolRegistry` (Layers A–F).
+- `planning-action-plan.tsx` provides the shared large viewer for generated replies and saved versions. `planning-plan.ts` parses the six-column matrix and recorded source metadata; `planning-plan-pdf.ts` exports the selected snapshot using bundled fonts. Content is rendered as text and structured cells, without executing model-authored HTML or diagram code.
 - Tool schemas omit location overrides, model-supplied gaps and custom scoring weights. Laravel injects the selected municipality, validates argument types, and limits tool calls, history and evidence sizes.
 - `generate_action_plan` runs with `include_narrative=false` in chat, avoiding the legacy Gemini narrative call. No-match plans do not fabricate a deployment package or feasibility status.
 - Chat replies distinguish local evidence from screening estimates and proposed actions. Plans remain drafts pending LGU/DOST validation. Model-generated prose still requires human review.

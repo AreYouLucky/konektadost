@@ -16,6 +16,7 @@ use App\FunctionTools\LayerF\GenerateInterventionPlanTool;
 use App\Models\Barangay;
 use App\Models\Municipality;
 use App\Models\Province;
+use App\Support\Caching\ReadCache;
 use Illuminate\Database\Eloquent\Model;
 use InvalidArgumentException;
 
@@ -208,6 +209,12 @@ class AssessmentFunctionTools
      */
     public function execute(string $toolName, array $arguments = []): array
     {
+        return app(ReadCache::class)->remember('assessment.dispatch.'.$toolName, $arguments,
+            fn () => $this->executeTool($toolName, $arguments));
+    }
+
+    private function executeTool(string $toolName, array $arguments): array
+    {
         if ($toolName === 'search_dost_technologies') {
             return $this->dostCatalogService->searchDostTechnologies($arguments);
         }
@@ -238,7 +245,7 @@ class AssessmentFunctionTools
                 : ['error' => 'calculate_priority_scores requires a Municipality model.'],
             'get_local_dost_projects' => $this->dostCatalogService->getLocalDostProjects($location),
             'search_dost_technologies' => app(SearchDostTechnologiesTool::class)->execute($arguments),
-            'match_dost_interventions' => app(MatchDostInterventionsTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
+            'match_dost_interventions' => app(MatchDostInterventionsTool::class)->execute([...$arguments, 'location' => $location]),
             'assess_intervention_suitability' => app(AssessInterventionSuitabilityTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
             'assess_implementation_feasibility' => app(AssessImplementationFeasibilityTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
             'identify_implementation_partners' => app(IdentifyImplementationPartnersTool::class)->execute(array_merge(['municipality_id' => $location->id], $arguments)),
@@ -260,6 +267,12 @@ class AssessmentFunctionTools
      */
     public function computeLocationBundle(Model $location, bool $includeActionPlan = true): array
     {
+        return app(ReadCache::class)->remember('assessment.bundle', compact('location', 'includeActionPlan'),
+            fn () => $this->buildLocationBundle($location, $includeActionPlan));
+    }
+
+    private function buildLocationBundle(Model $location, bool $includeActionPlan): array
+    {
         return [
             'dataset_audit' => $this->datasetService->getAvailableDatasets($location),
             'local_assets' => $this->datasetService->getLocalAssets($location),
@@ -279,7 +292,7 @@ class AssessmentFunctionTools
             'priority_scores' => $location instanceof Municipality ? $this->prioritizationService->calculatePriorityScores($location) : null,
             'local_dost_projects' => $this->dostCatalogService->getLocalDostProjects($location),
             'dost_technologies' => $this->dostCatalogService->searchDostTechnologies(['limit' => 30]),
-            'matched_interventions' => $location instanceof Municipality ? app(MatchDostInterventionsTool::class)->execute(['municipality_id' => $location->id]) : null,
+            'matched_interventions' => app(MatchDostInterventionsTool::class)->execute(['location' => $location]),
             'action_plan' => $includeActionPlan && $location instanceof Municipality ? app(GenerateActionPlanTool::class)->execute(['municipality_id' => $location->id]) : null,
         ];
     }

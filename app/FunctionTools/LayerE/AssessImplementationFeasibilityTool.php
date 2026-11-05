@@ -274,7 +274,9 @@ class AssessImplementationFeasibilityTool implements FunctionToolInterface
             $missing[] = 'Municipality geographic identity';
         }
 
-        $hasPop = $municipality->populationFigure !== null || $municipality->populationFigures()->count() > 0;
+        $population = app(\App\FunctionTools\LayerA\GetPopulationStatisticsTool::class)
+            ->forLocation($municipality, includeBarangayDistribution: false)['population_current'] ?? null;
+        $hasPop = $population !== null && $population > 0;
         if (!$hasPop) {
             $missing[] = 'Verified population figures';
         }

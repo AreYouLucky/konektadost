@@ -90,6 +90,30 @@ class PlanningChatTest extends TestCase
             ->assertOk()->assertJsonPath('location.name', 'Test City')->assertJsonPath('configured', true)->assertJsonCount(0, 'messages');
     }
 
+    public function test_cached_planning_reads_remain_private_and_refresh_after_new_messages_and_plans(): void
+    {
+        config(['read-cache.enabled' => true, 'read-cache.store' => 'array']);
+        $this->signIn();
+        $savedUrl = route('planning-chat.saved-plans');
+        $chatUrl = route('planning-chat.show', ['city' => '0701232000']);
+        $this->getJson($savedUrl)->assertOk()->assertJsonCount(0, 'items');
+        $this->getJson($chatUrl)->assertOk()->assertJsonCount(0, 'messages');
+        Http::fake(['api.openai.com/v1/responses' => Http::sequence()
+            ->push($this->text($this->planText('Private cached plan')))
+            ->push($this->text('A new reply'))]);
+        $plan = $this->postMessage('Create a plan')->assertOk()->json('saved_plan_id');
+        $this->getJson($savedUrl)->assertOk()->assertJsonCount(1, 'items');
+        $this->getJson($chatUrl)->assertOk()->assertJsonCount(2, 'messages');
+        $this->postMessage('Continue the plan')->assertOk();
+        $this->getJson($chatUrl)->assertOk()->assertJsonCount(4, 'messages');
+        $planUrl = route('planning-chat.plan', ['plan' => $plan, 'city' => '0701232000']);
+        $this->getJson($planUrl)->assertOk()->assertJsonPath('plan.title', 'Private cached plan');
+        $this->signIn(2);
+        $this->getJson($savedUrl)->assertOk()->assertJsonCount(0, 'items');
+        $this->getJson($chatUrl)->assertOk()->assertJsonCount(0, 'messages');
+        $this->getJson($planUrl)->assertNotFound();
+    }
+
     public function test_greeting_and_followup_use_server_history_without_exposing_credentials(): void
     {
         $this->signIn();

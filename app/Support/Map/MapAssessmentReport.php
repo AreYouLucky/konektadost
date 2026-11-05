@@ -5,6 +5,8 @@ namespace App\Support\Map;
 use App\Models\Barangay;
 use App\Models\Municipality;
 use App\Models\Province;
+use App\Support\Assessment\AssessmentComputationCache;
+use App\Support\Assessment\AssessmentFunctionTools;
 use App\Support\Assessment\IndicatorCatalog;
 use App\Support\Assessment\MunicipalityAssessmentData;
 use App\Support\Assessment\MunicipalityProfileService;
@@ -18,6 +20,11 @@ use Illuminate\Validation\Rule;
 class MapAssessmentReport
 {
     public function props(Request $request, bool $deferMunicipality = false): array
+    {
+        return app(AssessmentComputationCache::class)->within(fn () => $this->buildProps($request, $deferMunicipality));
+    }
+
+    private function buildProps(Request $request, bool $deferMunicipality): array
     {
         $data = $request->validate([
             'level' => ['required', Rule::in(['province', 'municipality', 'barangay'])],
@@ -101,10 +108,10 @@ class MapAssessmentReport
                 'population_statistics' => $profile['population_statistics'] ?? null,
             ],
             'municipalityProfile' => $profile,
-            'functionToolsBundle' => null,
+            'functionToolsBundle' => app(AssessmentFunctionTools::class)->computeLocationBundle($locationModel, includeActionPlan: false),
             'layerEResult' => null,
             'barangayAssessment' => null,
-            'analysisScopeNotice' => 'This report shows the selected '.$scope->level.' only. Select a city or municipality for the full sector analysis, barangay priorities, and intervention feasibility assessment.',
+            'analysisScopeNotice' => 'Sector analysis, development gaps, and catalog screening use only the selected '.$scope->level.'. Detailed barangay rankings and implementation feasibility require a city or municipality assessment.',
             'populationYear' => $resources['population']['year'], 'populationReason' => $resources['population']['reason'],
             'focus' => $focus, 'dimensions' => IndicatorCatalog::dimensions(), 'results' => $results,
             ...$navigation,

@@ -2,6 +2,7 @@
 
 namespace App\Support\Map;
 
+use App\Support\Caching\ReadCache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -9,6 +10,14 @@ use Illuminate\Support\Facades\Schema;
 class LocationRoads
 {
     public function page(GeographyExplorer $geography, string $level, int $id, int $cursor = 0, int $limit = 2000): array
+    {
+        $geography->selection($level, $id, false);
+
+        return app(ReadCache::class)->remember('map.roads', compact('level', 'id', 'cursor', 'limit'),
+            fn () => $this->loadPage($geography, $level, $id, $cursor, $limit));
+    }
+
+    private function loadPage(GeographyExplorer $geography, string $level, int $id, int $cursor, int $limit): array
     {
         $geography->selection($level, $id, false);
         $scope = ['key' => $level.':'.$id, 'level' => $level, 'id' => $id];

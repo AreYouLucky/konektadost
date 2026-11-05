@@ -55,7 +55,8 @@ class SelectionAssessment
                 if ($rows->contains(fn (TelecomSite $site) => $site->technologyList() === [])) {
                     $unavailable['telecom_5g_share'] = 'Some recorded sites have no technology classification; 5G share is unavailable.';
                 } else {
-                    $counts['telecom_5g_share'] = round($rows->filter(fn (TelecomSite $site) => $site->supports('5G NR') || $site->supports('5G'))->count() / $rows->count() * 100, 1);
+                    $counts['telecom_5g_sites'] = $rows->filter(fn (TelecomSite $site) => $site->supports('5G NR') || $site->supports('5G'))->count();
+                    $counts['telecom_5g_share'] = round($counts['telecom_5g_sites'] / $rows->count() * 100, 1);
                 }
             }
         }

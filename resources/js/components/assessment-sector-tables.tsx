@@ -1,4 +1,7 @@
 import { assessmentSectors } from '@/components/assessment-ai-analysis';
+import { GapSeverityDetails, IndicatorCalculationDetails, InterventionCalculationDetails } from '@/components/assessment-calculation-details';
+import type { CalculationInputs, MatchScoreBreakdown } from '@/lib/assessment-explanations';
+import SourceBasisModal from '@/pages/location-assessment/source-basis-modal';
 import { useState, type ReactNode } from 'react';
 
 const number = (value: number | null | undefined) => (value == null ? 'Unavailable' : value.toLocaleString('en-PH', { maximumFractionDigits: 2 }));
@@ -65,6 +68,7 @@ export interface DevelopmentGap {
     affected_barangays_count: number;
     source?: string;
     reason?: string;
+    calculation?: CalculationInputs | null;
 }
 
 export interface SectorGapDiagnostic {
@@ -81,8 +85,7 @@ function SectorEvidenceNote({ diagnostic }: { diagnostic: SectorGapDiagnostic })
         <div>
             <p>{diagnostic.message}</p>
             {diagnostic.evidence_issues.length > 0 && (
-                <details className="mt-2">
-                    <summary className="cursor-pointer text-[#087dcc]">Why this sector could not be fully assessed</summary>
+                <SourceBasisModal title={<>Why this sector could not be fully assessed</>}>
                     <ul className="mt-2 space-y-2">
                         {diagnostic.evidence_issues.map((issue) => (
                             <li key={issue.indicator_key}>
@@ -91,7 +94,7 @@ function SectorEvidenceNote({ diagnostic }: { diagnostic: SectorGapDiagnostic })
                             </li>
                         ))}
                     </ul>
-                </details>
+                </SourceBasisModal>
             )}
         </div>
     );
@@ -168,12 +171,19 @@ export function GapSectorTable({
                                     <p className="text-muted-foreground mt-1">{number(gap.affected_barangays_count)} barangays identified</p>
                                 </td>
                                 <td className="max-w-xs p-3">
-                                    <details>
-                                        <summary className="cursor-pointer text-[#087dcc]">Source &amp; basis</summary>
+                                    <SourceBasisModal title={`Source & basis: ${gap.label}`}>
                                         <p className="mt-2">{gap.reason}</p>
                                         <p className="text-muted-foreground mt-1">{gap.source}</p>
                                         <p className="mt-1 capitalize">{label(gap.gap_type)}</p>
-                                    </details>
+                                        <IndicatorCalculationDetails
+                                            indicatorKey={gap.indicator_key}
+                                            value={gap.measured_value}
+                                            reference={gap.benchmark_value}
+                                            gap={gap.percentage_gap}
+                                            calculation={gap.calculation}
+                                        />
+                                        <GapSeverityDetails percentage={gap.percentage_gap} confidence={gap.confidence} score={gap.severity_score} />
+                                    </SourceBasisModal>
                                 </td>
                             </tr>
                         ))}
@@ -208,6 +218,7 @@ interface Intervention {
     agency?: string;
     availability_status?: string;
     relevance_score?: number | null;
+    score_breakdown?: MatchScoreBreakdown;
     matching_criteria?: string[];
     intended_beneficiaries?: string;
     description?: string;
@@ -272,9 +283,19 @@ export function InterventionSectorTable({
     const [sector, setSector] = useState('all');
     const matches = (matchedInterventions?.gap_interventions ?? []).filter((row) => sector === 'all' || row.domain === sector);
     const unmatchedSectors = diagnostics.filter((row) => row.gap_count === 0 && (sector === 'all' || row.sector === sector));
-    const rows = matches.flatMap<{ gap: GapMatch; item: Intervention | null }>((gap) =>
-        gap.matched_interventions.length ? gap.matched_interventions.map((item) => ({ gap, item })) : [{ gap, item: null }],
-    );
+    const grouped = new Map<string, { gap: GapMatch; item: Intervention; related: GapMatch[] }>();
+    const unmatched: { gap: GapMatch; item: null; related: GapMatch[] }[] = [];
+    for (const gap of matches) {
+        if (!gap.matched_interventions.length) unmatched.push({ gap, item: null, related: [gap] });
+        for (const item of gap.matched_interventions) {
+            const key = `${item.source_catalog}:${item.intervention_id}`;
+            const previous = grouped.get(key);
+            const best = !previous || (item.relevance_score ?? -1) > (previous.item.relevance_score ?? -1);
+            grouped.set(key, { gap: best ? gap : previous.gap, item: best ? item : previous.item, related: [...(previous?.related ?? []), gap] });
+        }
+    }
+    const rows = [...grouped.values()].sort((a, b) => (b.item.relevance_score ?? -1) - (a.item.relevance_score ?? -1));
+    const displayRows = [...rows, ...unmatched];
     return (
         <section className="min-w-0 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -289,30 +310,30 @@ export function InterventionSectorTable({
                     <caption className="sr-only">Sector gaps and their matched DOST catalog interventions</caption>
                     <thead className="sticky top-0 bg-blue-50 dark:bg-slate-900">
                         <tr>
-                            {['Sector / gap', 'Catalog intervention', 'Agency / status', 'Relevance', 'Matching basis & beneficiaries'].map(
-                                (title) => (
-                                    <th key={title} className="p-3">
-                                        {title}
-                                    </th>
-                                ),
-                            )}
+                            {['Needs addressed', 'Catalog option', 'Agency / status', 'Best relevance', 'Evidence'].map((title) => (
+                                <th key={title} className="p-3">
+                                    {title}
+                                </th>
+                            ))}
                         </tr>
                     </thead>
                     <tbody className="divide-y">
-                        {rows.map(({ gap, item }, index) => (
+                        {displayRows.map(({ gap, item, related }, index) => (
                             <tr key={`${gap.gap_id}:${item?.source_catalog}:${item?.intervention_id}:${index}`} className="align-top">
                                 <th scope="row" className="max-w-52 p-3 font-medium">
                                     <span className="text-muted-foreground mb-1 block text-[10px]">
-                                        {assessmentSectors[gap.domain] ?? label(gap.domain)}
+                                        {[...new Set(related.map((row) => row.domain))]
+                                            .map((domain) => assessmentSectors[domain] ?? label(domain))
+                                            .join(' / ')}
                                     </span>
-                                    {gap.gap_name}
-                                    <p className="text-muted-foreground mt-1 text-[10px] font-normal">Severity {number(gap.severity)}/100</p>
+                                    {[...new Set(related.map((row) => row.gap_name))].join('; ')}
                                 </th>
                                 <td className="max-w-64 p-3 font-medium">
                                     {item?.name ?? 'No verified catalog match'}
                                     {item && (
                                         <p className="text-muted-foreground mt-1 text-[10px] font-normal">
-                                            {item.source_catalog} · {item.intervention_id}
+                                            {item.source_catalog === 'dost_projects' ? 'Historical project lead' : 'Technology / program'} ·{' '}
+                                            {item.intervention_id}
                                         </p>
                                     )}
                                 </td>
@@ -323,8 +344,29 @@ export function InterventionSectorTable({
                                 <td className="p-3 font-mono">{item ? `${number(item.relevance_score)}/100` : '—'}</td>
                                 <td className="max-w-sm p-3">
                                     {item ? (
-                                        <details>
-                                            <summary className="cursor-pointer text-[#087dcc]">View matching basis</summary>
+                                        <SourceBasisModal title={`Source & basis: ${item.name}`}>
+                                            <p>Best returned match: {gap.gap_name}. The relevance score below applies to this match.</p>
+
+                                            <InterventionCalculationDetails
+                                                catalog={item.source_catalog}
+                                                score={item.relevance_score}
+                                                breakdown={item.score_breakdown}
+                                            />
+                                            <ul className="list-disc space-y-1 pl-5">
+                                                {related.map((row) => {
+                                                    const match = row.matched_interventions.find(
+                                                        (candidate) =>
+                                                            candidate.source_catalog === item.source_catalog &&
+                                                            candidate.intervention_id === item.intervention_id,
+                                                    );
+                                                    return (
+                                                        <li key={row.gap_id}>
+                                                            {row.gap_name}: {number(match?.relevance_score)}/100 relevance; gap severity{' '}
+                                                            {number(row.severity)}/100.
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
                                             <ul className="mt-2 list-inside list-disc">
                                                 {item.matching_criteria?.map((criterion) => (
                                                     <li key={criterion}>{criterion}</li>
@@ -332,7 +374,7 @@ export function InterventionSectorTable({
                                             </ul>
                                             <p className="mt-2">Beneficiaries: {item.intended_beneficiaries ?? 'Not recorded'}</p>
                                             {item.description && <p className="mt-2">{item.description}</p>}
-                                        </details>
+                                        </SourceBasisModal>
                                     ) : (
                                         gap.gap_unmatched_note
                                     )}
@@ -345,12 +387,11 @@ export function InterventionSectorTable({
                                     {assessmentSectors[diagnostic.sector] ?? label(diagnostic.sector)}
                                 </th>
                                 <td colSpan={4} className="text-muted-foreground p-3">
-                                    <p className="mb-1 font-medium">Intervention screening has no computed sector gap to use.</p>
                                     <SectorEvidenceNote diagnostic={diagnostic} />
                                 </td>
                             </tr>
                         ))}
-                        {rows.length === 0 && unmatchedSectors.length === 0 && (
+                        {displayRows.length === 0 && unmatchedSectors.length === 0 && (
                             <tr>
                                 <td colSpan={5} className="text-muted-foreground p-5">
                                     No intervention matches for this selection.
@@ -361,10 +402,11 @@ export function InterventionSectorTable({
                 </table>
             </TableFrame>
             {(feasibility || suitability) && (
-                <details className="rounded-lg border bg-white p-4 dark:bg-slate-950">
-                    <summary className="cursor-pointer text-sm font-medium text-[#087dcc]">
+                <section className="min-w-0 space-y-3 rounded-xl border border-sky-100 bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
+                    <h3 className="text-sm font-semibold text-[#087dcc]">
                         Implementation evaluation · {feasibility?.intervention?.name ?? suitability?.intervention?.name ?? 'Selected candidate'}
-                    </summary>
+                    </h3>
+
                     <p className="text-muted-foreground my-3 text-xs">
                         These evaluations apply to the candidate named in each result. They do not establish readiness for every catalog match.
                     </p>
@@ -387,6 +429,17 @@ export function InterventionSectorTable({
                                         <td className="p-3 capitalize">{label(feasibility.feasibility_status)}</td>
                                         <td className="p-3">
                                             {feasibility.feasibility_summary ?? feasibility.reason}
+                                            <SourceBasisModal title={<>How feasibility is decided</>}>
+                                                <p className="mt-2">
+                                                    This is a checklist, not an average score. Missing essential baseline information gives
+                                                    “insufficient information”. A blocking issue gives “not yet feasible”. Required follow-up actions
+                                                    give “conditionally feasible”. Otherwise, the tool returns “feasible”.
+                                                </p>
+                                                <p className="mt-1">
+                                                    Read the prerequisites and conditions below for this candidate. Current availability, partner
+                                                    commitments and site readiness still need local confirmation.
+                                                </p>
+                                            </SourceBasisModal>
                                             <ul className="mt-2 space-y-1">
                                                 {feasibility.verified_prerequisites?.map((item, index) => (
                                                     <li key={index}>
@@ -406,6 +459,24 @@ export function InterventionSectorTable({
                                             {number(suitability.suitability_score)}/100 · {label(suitability.suitability_level)}
                                         </td>
                                         <td className="p-3">
+                                            <SourceBasisModal title={<>How suitability is calculated</>}>
+                                                <p className="mt-2">
+                                                    Multiply each dimension rating below by its weight, add the results, then round to the nearest
+                                                    whole number.
+                                                </p>
+                                                <p className="mt-1 font-mono break-words">
+                                                    Need relevance × 0.30 + beneficiary reach × 0.20 + resource readiness × 0.15 + infrastructure
+                                                    readiness × 0.20 + institutional readiness × 0.15
+                                                </p>
+                                                <p className="mt-1">
+                                                    Highly suitable: 80–100; suitable: 65–below 80; moderately suitable: 45–below 65; low suitability:
+                                                    below 45.
+                                                </p>
+                                                <p className="mt-1">
+                                                    These are rule-based screening ratings. Some dimensions use default starting ratings, so the total
+                                                    is planning advice rather than independently verified implementation readiness.
+                                                </p>
+                                            </SourceBasisModal>
                                             {Object.entries(suitability.dimension_scores ?? {}).map(([key, value]) => (
                                                 <p key={key} className="capitalize">
                                                     {label(key)}: {number(value)}/100
@@ -422,13 +493,12 @@ export function InterventionSectorTable({
                             </tbody>
                         </table>
                     </TableFrame>
-                </details>
+                </section>
             )}
             {!!partners?.partners?.length && (
-                <details className="rounded-lg border bg-white p-4 dark:bg-slate-950">
-                    <summary className="cursor-pointer text-sm font-medium text-[#087dcc]">
-                        Implementation partners ({partners.partners.length})
-                    </summary>
+                <section className="min-w-0 space-y-3 rounded-xl border border-sky-100 bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
+                    <h3 className="text-sm font-semibold text-[#087dcc]">Implementation partners ({partners.partners.length})</h3>
+
                     <p className="text-muted-foreground mt-2 text-xs">Suggested roles require confirmation with the named organizations.</p>
                     <TableFrame name="Implementation partners">
                         <table className="mt-3 w-full min-w-[600px] text-left text-xs">
@@ -453,13 +523,14 @@ export function InterventionSectorTable({
                             </tbody>
                         </table>
                     </TableFrame>
-                </details>
+                </section>
             )}
             {requirements?.requirements && (
-                <details className="rounded-lg border bg-white p-4 dark:bg-slate-950">
-                    <summary className="cursor-pointer text-sm font-medium text-[#087dcc]">
+                <section className="min-w-0 space-y-3 rounded-xl border border-sky-100 bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
+                    <h3 className="text-sm font-semibold text-[#087dcc]">
                         Resource &amp; operational requirements · {requirements.intervention?.name ?? 'Selected candidate'}
-                    </summary>
+                    </h3>
+
                     <p className="text-muted-foreground my-3 text-xs">Tool-generated planning requirements need local confirmation.</p>
                     <TableFrame name="Resource requirements">
                         <table className="w-full min-w-[600px] text-left text-xs">
@@ -476,7 +547,7 @@ export function InterventionSectorTable({
                             </tbody>
                         </table>
                     </TableFrame>
-                </details>
+                </section>
             )}
         </section>
     );

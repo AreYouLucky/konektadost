@@ -7,6 +7,7 @@ use App\Models\AgricultureCountEstimate;
 use App\Models\AgricultureType;
 use App\Models\Municipality;
 use App\Models\Province;
+use App\Support\Caching\ReadCache;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Schema;
 
@@ -14,6 +15,12 @@ use Illuminate\Support\Facades\Schema;
 class ProvinceAgriculture
 {
     public function summary(int $provinceId, ?GeographicScope $scope = null): array
+    {
+        return app(ReadCache::class)->remember('map.agriculture', ['province' => $provinceId, 'scope' => $scope?->toArray()],
+            fn () => $this->buildSummary($provinceId, $scope));
+    }
+
+    private function buildSummary(int $provinceId, ?GeographicScope $scope): array
     {
         $scope ??= GeographicScope::province(Province::query()->findOrFail($provinceId));
         $result = [
@@ -161,6 +168,12 @@ class ProvinceAgriculture
     }
 
     public function records(int $provinceId, array $filters, ?GeographicScope $scope = null): array
+    {
+        return app(ReadCache::class)->remember('map.agriculture.records', ['province' => $provinceId, 'scope' => $scope?->toArray(), 'filters' => $filters],
+            fn () => $this->loadRecords($provinceId, $filters, $scope));
+    }
+
+    private function loadRecords(int $provinceId, array $filters, ?GeographicScope $scope): array
     {
         $scope ??= GeographicScope::province(Province::query()->findOrFail($provinceId));
         $empty = ['province_id' => $provinceId, 'scope' => $scope->toArray(), 'status' => 'unavailable', 'model_year' => null, 'data' => [],

@@ -2,6 +2,7 @@
 
 namespace App\Support\Assessment;
 
+use App\FunctionTools\LayerA\GetAvailableDatasetsTool;
 use App\Models\Barangay;
 use App\Models\CollectionYear;
 use App\Models\Municipality;
@@ -115,14 +116,15 @@ class LocationAssessor
      */
     private function countsFor(Model $location, ?int $population): array
     {
-        $facilities = $location->facilities();
-        $laboratories = $location->laboratories();
+        $datasets = app(DatasetAndAssetService::class);
+        $facilities = $datasets->facilityQueryFor($location);
+        $laboratories = $datasets->laboratoryQueryFor($location);
 
         if ($population === null) {
             return [];
         }
 
-        [$telecomTotal, $telecom5gShare] = $this->telecomMetricsFor($location);
+        [$telecomTotal, $telecom5gShare, $telecom5gCount] = $this->telecomMetricsFor($location);
 
         $hasSectors = Schema::hasColumn('facilities', 'sector');
         $hasTypes = Schema::hasColumn('facilities', 'facility_type');
@@ -138,6 +140,7 @@ class LocationAssessor
             'laboratory_tests_per_million' => Schema::hasTable('laboratories') && Schema::hasTable('lab_services') ? $this->distinctTestCount($location) : null,
             'telecom_sites_per_100k' => Schema::hasTable('telecom_sites') ? $telecomTotal : null,
             'telecom_5g_share' => $telecom5gShare,
+            'telecom_5g_sites' => $telecom5gCount,
             'unknown_education_share' => $this->unknownEducationShare($location),
         ], fn ($value) => $value !== null);
     }
@@ -145,25 +148,25 @@ class LocationAssessor
     /**
      * Total telecom cell sites and percentage carrying 5G NR for a location.
      *
-     * @return array{0: int, 1: float|null}
+     * @return array{0: int, 1: float|null, 2: int|null}
      */
     private function telecomMetricsFor(Model $location): array
     {
         if (! Schema::hasTable('telecom_sites')) {
-            return [0, null];
+            return [0, null, null];
         }
 
-        $query = app(\App\FunctionTools\LayerA\GetAvailableDatasetsTool::class)->telecomQueryFor($location);
+        $query = app(GetAvailableDatasetsTool::class)->telecomQueryFor($location);
         $sites = $query->get(['id', 'technologies']);
         $total = $sites->count();
 
         if ($total === 0) {
-            return [0, null];
+            return [0, null, null];
         }
 
         $with5g = $sites->filter(fn (TelecomSite $site) => $site->supports('5G NR') || $site->supports('5G'))->count();
 
-        return [$total, round($with5g / $total * 100, 1)];
+        return [$total, round($with5g / $total * 100, 1), $with5g];
     }
 
     /**
@@ -175,7 +178,7 @@ class LocationAssessor
      */
     private function distinctTestCount(Model $location): int
     {
-        return $location->laboratories()
+        return app(DatasetAndAssetService::class)->laboratoryQueryFor($location)
             ->with('tests')
             ->get()
             ->flatMap(fn ($lab) => $lab->tests->map(fn ($service) => [
@@ -198,13 +201,14 @@ class LocationAssessor
             return 1.0;
         }
 
-        $total = (clone $location->facilities())->where('sector', 'education')->count();
+        $facilities = app(DatasetAndAssetService::class)->facilityQueryFor($location);
+        $total = (clone $facilities)->where('sector', 'education')->count();
 
         if ($total === 0) {
             return 0.0;
         }
 
-        $unknown = (clone $location->facilities())
+        $unknown = (clone $facilities)
             ->where('sector', 'education')
             ->where(function ($query) {
                 $query->whereNull('level')->orWhere('level', '')->orWhere('level', 'unknown');
@@ -264,6 +268,25 @@ class LocationAssessor
         }
 
         $benchmarkValue = $this->dynamicBenchmarkFor($indicator->key);
+        $calculation = [
+            'numerator' => match ($indicator->key) {
+                'population_density' => $population,
+                'telecom_5g_share' => $context['counts']['telecom_5g_sites'] ?? null,
+                default => $context['counts'][$indicator->key] ?? null,
+            },
+            'denominator' => match ($indicator->key) {
+                'population_density' => $context['area_km2'],
+                'telecom_5g_share' => $context['counts']['telecom_sites_per_100k'] ?? null,
+                default => $population,
+            },
+            'multiplier' => match ($indicator->key) {
+                'population_density' => 1,
+                'telecom_5g_share' => 100,
+                'laboratories_per_million', 'laboratory_tests_per_million' => self::PER_MILLION,
+                default => self::PER_100K,
+            },
+            'population_year' => CollectionYear::activeYear(),
+        ];
 
         // Confidence is a property of the measurement, so it is evaluated
         // independently of whether a benchmark happens to exist.
@@ -279,6 +302,7 @@ class LocationAssessor
                 reason: $confidenceNote !== ''
                     ? $confidenceNote
                     : 'Measured, but underlying source tables do not have sufficient data to compute a reference rate.',
+                calculation: $calculation,
             );
         }
 
@@ -296,6 +320,7 @@ class LocationAssessor
             confidence: $confidence,
             reason: $confidenceNote,
             basisNote: 'Reference rate computed dynamically from source tables across all recorded areas.',
+            calculation: $calculation,
         );
     }
 

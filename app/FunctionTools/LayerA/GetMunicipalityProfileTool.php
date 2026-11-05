@@ -219,7 +219,7 @@ class GetMunicipalityProfileTool implements FunctionToolInterface
         $prefix = LocationResolver::psgcPrefixFor('municipality', $psgCode);
 
         $urbanRuralByPsgc = [];
-        if ($prefix !== '' && Schema::hasTable('place_descriptions')) {
+        if ($prefix !== '' && Schema::hasColumns('place_descriptions', ['psg_code', 'urban_rural'])) {
             $urbanRuralByPsgc = PlaceDescription::query()
                 ->where('release_id', PlaceDescription::latestReleaseId())
                 ->where('level', PlaceDescription::LEVEL_BARANGAY)

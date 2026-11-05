@@ -7,7 +7,9 @@ use App\Models\User;
 use App\Support\Assessment\AssessmentAiService;
 use App\Support\Assessment\MunicipalityAssessmentData;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -50,6 +52,61 @@ class AssessmentAiTest extends TestCase
         config(['services.openai.api_key' => null]);
         $this->assertSame('unavailable', app(AssessmentAiService::class)->analyze($this->report())['status']);
         Http::assertNothingSent();
+    }
+
+    public function test_gpt5_explanations_use_a_small_reasoning_budget_and_grounded_reference_schema(): void
+    {
+        config(['services.openai.model' => 'gpt-5']);
+        Http::fake(['api.openai.com/v1/responses' => Http::response($this->response())]);
+        $this->assertSame('ready', app(AssessmentAiService::class)->analyze($this->report())['status']);
+        Http::assertSent(function ($request) {
+            $schema = $request['text']['format']['schema'];
+            $row = $schema['properties']['sectors']['items']['properties'];
+
+            return $request['model'] === 'gpt-5' && $request['reasoning']['effort'] === 'low'
+                && $request['text']['verbosity'] === 'low'
+                && $schema['properties']['sectors']['minItems'] === 8
+                && $schema['properties']['sectors']['maxItems'] === 8
+                && $row['indicator_keys']['items']['enum'] === ['health_facilities_per_100k']
+                && $row['intervention_refs']['items']['enum'] === ['dost_techs:HEALTH-1']
+                && $row['intervention_refs']['maxItems'] === 2;
+        });
+    }
+
+    public function test_non_reasoning_models_and_empty_catalog_evidence_keep_a_valid_schema(): void
+    {
+        config(['services.openai.model' => 'gpt-4.1-mini']);
+        $report = $this->report();
+        $report['results'] = [];
+        $report['layerEResult'] = null;
+        Http::fake(['api.openai.com/v1/responses' => Http::response($this->response())]);
+        $this->assertSame('ready', app(AssessmentAiService::class)->analyze($report)['status']);
+        Http::assertSent(function ($request) {
+            $row = $request['text']['format']['schema']['properties']['sectors']['items']['properties'];
+
+            return ! isset($request['reasoning']) && ! isset($request['text']['verbosity'])
+                && $row['indicator_keys']['maxItems'] === 0 && $row['intervention_refs']['maxItems'] === 0
+                && ! isset($row['intervention_refs']['items']['enum']);
+        });
+    }
+
+    public function test_timeout_is_identified_safely_and_does_not_cache_a_failed_analysis(): void
+    {
+        Log::shouldReceive('warning')->once()->with('Assessment AI analysis unavailable', ['reason' => 'timeout']);
+        $attempt = 0;
+        Http::fake(function () use (&$attempt) {
+            if (++$attempt === 1) {
+                throw new ConnectionException('cURL error 28: private-test-key');
+            }
+
+            return Http::response($this->response());
+        });
+        $service = app(AssessmentAiService::class);
+        $result = $service->analyze($this->report());
+        $this->assertSame('unavailable', $result['status']);
+        $this->assertStringContainsString('too long', $result['message']);
+        $this->assertStringNotContainsString('private-test-key', json_encode($result));
+        $this->assertSame('ready', $service->analyze($this->report())['status']);
     }
 
     public function test_conflicting_inventory_totals_are_removed_from_ai_sector_evidence(): void

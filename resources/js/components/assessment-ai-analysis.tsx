@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { csrfHeaders } from '@/lib/csrf';
 import { LoaderCircle, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -22,7 +23,7 @@ export interface AiSectorAnalysis {
     intervention_refs: string[];
 }
 
-interface AiResult {
+export interface AiResult {
     status: 'ready';
     generated_at: string;
     analysis: { summary: string; sectors: AiSectorAnalysis[] };
@@ -31,8 +32,11 @@ interface AiResult {
 
 type AiState = { key: string; status: 'idle' | 'loading' | 'error' | 'ready'; result?: AiResult; message?: string };
 
-export function useAssessmentAi(city: string | null, focus: string, active: boolean, enabled: boolean) {
-    const key = `${city}:${focus}`;
+export function useAssessmentAi(city: string | null, focus: string, active: boolean, enabled: boolean, scope?: Record<string, string | number>) {
+    const level = scope?.level;
+    const location = scope?.location;
+    const map = scope?.map;
+    const key = `${level ?? 'municipality'}:${location ?? city}:${focus}:${map ?? ''}`;
     const [state, setState] = useState<AiState>({ key, status: 'idle' });
     const started = useRef<string | null>(null);
     const request = useRef<AbortController | null>(null);
@@ -54,14 +58,15 @@ export function useAssessmentAi(city: string | null, focus: string, active: bool
                     Accept: 'application/json',
                     'Content-Type': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '',
+                    ...csrfHeaders(),
                 },
-                body: JSON.stringify({ city, focus }),
+                body: JSON.stringify(level && location ? { level, location, map, focus } : { city, focus }),
             });
             if (response.redirected || [401, 419].includes(response.status))
                 throw new Error('Your session has expired. Refresh the page and sign in again.');
             if (response.status === 429) throw new Error('Please wait a moment before requesting another AI analysis.');
-            const payload = await response.json();
+            const payload = await response.json().catch(() => null);
+            if (!payload) throw new Error('The AI request did not finish successfully. Please retry.');
             if (!response.ok || payload.status !== 'ready')
                 throw new Error(payload.message || 'AI analysis is temporarily unavailable. Please retry.');
             if (!Array.isArray(payload.analysis?.sectors)) throw new Error('The AI response was incomplete. Please retry.');
@@ -80,7 +85,7 @@ export function useAssessmentAi(city: string | null, focus: string, active: bool
         } finally {
             window.clearTimeout(timer);
         }
-    }, [city, focus, key, enabled]);
+    }, [city, focus, key, enabled, level, location, map]);
 
     useEffect(() => {
         if (active && enabled && started.current !== key) void generate();

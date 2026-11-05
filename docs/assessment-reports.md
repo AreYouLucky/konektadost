@@ -1,0 +1,18 @@
+# Assessment overviews and PDF export
+
+1. Open a province, city/municipality or barangay assessment. **Technology & Lab Fit** opens first with matched technology/program options, the needs they address and recorded laboratory partners/referrals. Historical projects remain supporting evidence, not deployable technology options.
+2. Each layer displays its charts, results and implementation sections directly. **Source & basis** opens a scrollable modal with evidence and worked formulas; close it with Escape or the close button. Options that match multiple needs appear once in the intervention table, using their highest relevance, with every need and score retained in the modal. Population history, needs with catalog options and local laboratory capabilities have their own charts. A new laboratory requires verified demand, equipment, staff and budget.
+3. Click **Export to PDF** below the location summary. The file downloads directly and includes all five layers, their charts, returned records, formulas, sources and explanations. It covers the assessment selection and focus, rather than just the visible tab or local table search.
+4. Click **Generate Action Plan PDF** for a separate landscape plan using the supplied workbook’s six columns: Activities, Objectives, Results, Timeline, Budget/Resources, and Responsible Person/Office. It includes priority areas, critical needs, up to four distinct technology/program options, a laboratory pathway, a decision flowchart, evidence graphs, resource priorities and performance checks.
+
+Completed AI interpretation is included when available. Export does not generate a new AI response or wait for one. Missing figures remain unavailable, recorded zeros remain zeros, and provisional evidence remains labelled. Project/catalog queries can return a limited list; the report states this and distinguishes returned entries from total matches.
+
+Action plans use a proposed 12-week schedule, uncosted resource categories and proposed responsible offices. Technology pilot activities depend on validation; when no technology/program matches exist, the plan contains evidence gathering and option review rather than an unsupported pilot assignment. Nearby laboratories are referral leads, not proposed new buildings. AI wording is reused only when its sector, catalog reference and recorded option name match the current shortlist; it never sets scores, budgets or beneficiaries.
+
+Format reference: `Region I BDRRM Action PLan.xlsx`, supplied sample, `Sheet1`, row 2. The historical example contents are not imported into the generated plan. Source modules: `assessment-action-plan.ts` (draft rules), `assessment-action-plan-pdf.ts` (PDF layout), and `pages/location-assessment/action-plan-export.tsx` (download control).
+
+The final **Data sources & attribution** table appears in every assessment tab and at the end of the PDF. It lists the dataset, source/provider, recorded year/reference and its use. Missing original providers, import dates and release versions are labelled as not recorded; computed results are attributed to KonektaDOST rather than an external data provider.
+
+For deployment, run the usual `npm ci` and `npm run build`. PDF generation loads on demand and uses bundled Noto Sans fonts, so formulas and local names remain searchable text rather than screenshots. Font source and license are in `resources/fonts/noto-sans/`.
+
+The route entry is `resources/js/pages/location-assessment.tsx`. Feature components and shared report types are in `resources/js/pages/location-assessment/`, including navigation, inventory, sector evidence, barangay priorities, catalog records, laboratory services and the source modal.

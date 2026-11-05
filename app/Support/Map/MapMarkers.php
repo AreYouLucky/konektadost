@@ -5,6 +5,7 @@ namespace App\Support\Map;
 use App\Models\DostTech;
 use App\Models\Province;
 use App\Models\TelecomSite;
+use App\Support\Caching\ReadCache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -12,6 +13,11 @@ use Illuminate\Support\Facades\Schema;
 class MapMarkers
 {
     public function all(GeographyExplorer $geography): array
+    {
+        return app(ReadCache::class)->remember('map.markers', [], fn () => $this->buildMarkers($geography));
+    }
+
+    private function buildMarkers(GeographyExplorer $geography): array
     {
         $pins = [];
         $datasets = [];

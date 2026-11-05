@@ -1,5 +1,7 @@
+import PlanningActionPlan from '@/components/planning-action-plan';
 import PlanningVisuals, { type PlanningVisual } from '@/components/planning-visuals';
 import { SidebarMenuButton, useSidebar } from '@/components/ui/sidebar';
+import { isPlanningActionPlan } from '@/lib/planning-plan';
 import type { SharedData } from '@/types';
 import { usePage } from '@inertiajs/react';
 import * as Dialog from '@radix-ui/react-dialog';
@@ -59,6 +61,29 @@ interface SavedPlan {
     content: string;
     created_at: string;
     visuals?: PlanningVisual[];
+    evidence_snapshot?: unknown;
+}
+
+function PlanningReply({ message, location }: { message: Message; location: Municipality | null }) {
+    if (message.saved_plan_id || isPlanningActionPlan(message.content))
+        return (
+            <PlanningActionPlan
+                snapshot={{
+                    content: message.content,
+                    location: location?.name ?? 'Location not recorded',
+                    province: location?.province_name,
+                    created_at: message.generated_at,
+                    visuals: message.visuals,
+                    sources: message.sources,
+                }}
+            />
+        );
+    return (
+        <>
+            <div className="break-words whitespace-pre-wrap">{message.content}</div>
+            <PlanningVisuals visuals={message.visuals} />
+        </>
+    );
 }
 
 interface HistoryItem {
@@ -659,6 +684,7 @@ function PlanningChatWindow({
                             <PlanningChatArchive
                                 key={`${currentKey}:${view}`}
                                 scope={scope}
+                                location={location}
                                 kind={view}
                                 initialPlanId={
                                     view === 'plans' && initialScope && currentKey === queryString(initialScope) ? initialPlanId : undefined
@@ -701,8 +727,11 @@ function PlanningChatWindow({
                                             className={`max-w-[95%] min-w-0 rounded-2xl px-3 py-2.5 text-sm leading-relaxed ${message.role === 'user' ? 'rounded-br-sm bg-[#087dcc] text-white' : 'rounded-bl-sm border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900'}`}
                                         >
                                             <span className="sr-only">{message.role === 'user' ? 'You: ' : 'Assistant: '}</span>
-                                            <div className="break-words whitespace-pre-wrap">{message.content}</div>
-                                            {message.role === 'assistant' && <PlanningVisuals visuals={message.visuals} />}
+                                            {message.role === 'assistant' ? (
+                                                <PlanningReply message={message} location={location} />
+                                            ) : (
+                                                <div className="break-words whitespace-pre-wrap">{message.content}</div>
+                                            )}
                                             {message.sources && message.sources.length > 0 && (
                                                 <details className="mt-2 border-t border-slate-100 pt-2 text-[10px] text-slate-500 dark:border-slate-700">
                                                     <summary className="cursor-pointer">Tools consulted ({message.sources.length})</summary>
@@ -861,12 +890,14 @@ function PlanningChatWindow({
 
 function PlanningChatArchive({
     scope,
+    location,
     kind,
     initialPlanId,
     onResume,
     disabled,
 }: {
     scope: Scope;
+    location: Municipality;
     kind: 'chats' | 'plans';
     initialPlanId?: number;
     onResume: (id: number) => void;
@@ -931,12 +962,7 @@ function PlanningChatArchive({
                 >
                     <ArrowLeft className="size-3.5" /> All saved plans
                 </button>
-                <h3 className="font-semibold">{plan.title}</h3>
-                <p className="mt-1 text-[11px] text-slate-500">
-                    Version {plan.version} · {plan.created_at} · Draft pending validation
-                </p>
-                <div className="mt-4 leading-relaxed break-words whitespace-pre-wrap">{plan.content}</div>
-                <PlanningVisuals visuals={plan.visuals} expanded />
+                <PlanningActionPlan key={plan.id} initiallyOpen snapshot={{ ...plan, location: location.name, province: location.province_name }} />
                 <button
                     type="button"
                     disabled={disabled}

@@ -5,6 +5,7 @@ namespace App\Support\Map;
 use App\Models\Barangay;
 use App\Models\Municipality;
 use App\Models\Province;
+use App\Support\Caching\ReadCache;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema;
@@ -17,6 +18,12 @@ class GeographyExplorer
     private array $records = [];
 
     public function locations(string $level, ?int $parentId = null, bool $geometry = false): array
+    {
+        return app(ReadCache::class)->remember('geography.locations', compact('level', 'parentId', 'geometry'),
+            fn () => $this->loadLocations($level, $parentId, $geometry), (int) config('read-cache.geography_ttl'));
+    }
+
+    private function loadLocations(string $level, ?int $parentId, bool $geometry): array
     {
         $query = $this->query($level);
 
@@ -41,6 +48,12 @@ class GeographyExplorer
 
     public function selection(string $level, int $id, bool $geometry = true): array
     {
+        return app(ReadCache::class)->remember('geography.selection', compact('level', 'id', 'geometry'),
+            fn () => $this->loadSelection($level, $id, $geometry), (int) config('read-cache.geography_ttl'));
+    }
+
+    private function loadSelection(string $level, int $id, bool $geometry): array
+    {
         $row = $this->record($level, $id, $geometry);
 
         return [
@@ -50,6 +63,11 @@ class GeographyExplorer
     }
 
     public function search(string $term): array
+    {
+        return app(ReadCache::class)->remember('geography.search', compact('term'), fn () => $this->searchLocations($term));
+    }
+
+    private function searchLocations(string $term): array
     {
         // Bound parameters plus escaped LIKE wildcards; whitespace-insensitive for GADM names.
         $needle = '%'.addcslashes(mb_strtolower(preg_replace('/\s+/u', '', $term)), '\\%_').'%';

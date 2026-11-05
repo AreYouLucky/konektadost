@@ -1,6 +1,6 @@
 import { ArrowDown, BarChart3, GitBranch } from 'lucide-react';
 
-interface BarVisual {
+export interface BarVisual {
     type: 'bar';
     title: string;
     unit: string;
@@ -10,7 +10,7 @@ interface BarVisual {
     source_tool: string;
 }
 
-interface AssignmentDiagram {
+export interface AssignmentDiagram {
     type: 'assignment_diagram';
     title: string;
     caption: string;
@@ -28,17 +28,15 @@ export default function PlanningVisuals({ visuals, expanded = false }: { visuals
     if (!visuals?.length) return null;
 
     return (
-        <section aria-label="Evidence graphs and technology assignment diagrams" className="mt-4 min-w-0 space-y-2">
-            <h4 className="flex items-center gap-1.5 text-xs font-semibold text-[#087dcc]">
+        <section
+            aria-label="Evidence graphs and technology assignment diagrams"
+            className={expanded ? 'mt-5 grid min-w-0 items-start gap-4 lg:grid-cols-2' : 'mt-4 min-w-0 space-y-2'}
+        >
+            <h4 className="col-span-full flex items-center gap-1.5 text-xs font-semibold text-[#087dcc]">
                 <BarChart3 className="size-3.5" aria-hidden="true" /> Graphs &amp; assignment diagrams
             </h4>
-            {visuals.map((visual, index) => (
-                <details
-                    key={`${visual.type}:${index}`}
-                    open={expanded || index === 0}
-                    className="min-w-0 rounded-xl border border-blue-100 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-950"
-                >
-                    <summary className="cursor-pointer text-xs font-semibold text-slate-700 dark:text-slate-200">{visual.title}</summary>
+            {visuals.map((visual, index) => {
+                const figure = (
                     <figure className="mt-3 min-w-0">
                         {visual.type === 'bar' ? (
                             <ScoreChart visual={visual} />
@@ -50,8 +48,26 @@ export default function PlanningVisuals({ visuals, expanded = false }: { visuals
                             <span className="mt-1 block break-words">Source: {visual.source_tool}</span>
                         </figcaption>
                     </figure>
-                </details>
-            ))}
+                );
+                return expanded ? (
+                    <section
+                        key={`${visual.type}:${index}`}
+                        className="min-w-0 rounded-xl border border-blue-100 bg-white p-4 dark:border-slate-700 dark:bg-slate-950"
+                    >
+                        <h5 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{visual.title}</h5>
+                        {figure}
+                    </section>
+                ) : (
+                    <details
+                        key={`${visual.type}:${index}`}
+                        open={index === 0}
+                        className="min-w-0 rounded-xl border border-blue-100 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-950"
+                    >
+                        <summary className="cursor-pointer text-xs font-semibold text-slate-700 dark:text-slate-200">{visual.title}</summary>
+                        {figure}
+                    </details>
+                );
+            })}
         </section>
     );
 }

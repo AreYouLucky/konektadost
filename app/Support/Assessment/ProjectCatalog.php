@@ -3,12 +3,18 @@
 namespace App\Support\Assessment;
 
 use App\Models\DostTech;
+use App\Support\Caching\ReadCache;
 use Illuminate\Support\Facades\Schema;
 
 /** Reference options for transparent screening, not verified local projects. */
 class ProjectCatalog
 {
     public function summary(): array
+    {
+        return app(ReadCache::class)->remember('catalog.summary', [], fn () => $this->buildSummary());
+    }
+
+    private function buildSummary(): array
     {
         $result = [
             'status' => 'unavailable',

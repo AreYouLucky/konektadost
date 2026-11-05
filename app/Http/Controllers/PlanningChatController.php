@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Municipality;
 use App\Support\Ai\PlanningChatHistory;
 use App\Support\Ai\PlanningChatService;
+use App\Support\Caching\ReadCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -19,9 +20,9 @@ class PlanningChatController extends Controller
         $data = $request->validate(['q' => ['required', 'string', 'min:2', 'max:100']]);
         $query = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], trim($data['q']));
 
-        return $this->json(['locations' => Municipality::query()
+        return $this->json(app(ReadCache::class)->remember('planning.locations', ['query' => $query], fn () => ['locations' => Municipality::query()
             ->where(fn ($q) => $q->where('name', 'like', '%'.$query.'%')->orWhere('province_name', 'like', '%'.$query.'%'))
-            ->orderBy('name')->limit(10)->get(['id', 'psg_code', 'name', 'province_name'])]);
+            ->orderBy('name')->limit(10)->get(['id', 'psg_code', 'name', 'province_name'])->toArray()]));
     }
 
     public function show(Request $request): JsonResponse
@@ -47,7 +48,9 @@ class PlanningChatController extends Controller
             ? $this->history->find($request->user()->id, $municipality->id, $data['conversation_id'])
             : $this->history->active($request->user()->id, $municipality->id);
 
-        return $this->response($municipality, $this->history->payload($conversation, $data['before'] ?? null));
+        return $this->response($municipality, $this->readHistory($request, 'messages',
+            ['municipality' => $municipality->id, 'conversation' => $conversation?->id, 'before' => $data['before'] ?? null],
+            fn () => $this->history->payload($conversation, $data['before'] ?? null)));
     }
 
     public function store(Request $request, PlanningChatService $chat): JsonResponse
@@ -97,7 +100,8 @@ class PlanningChatController extends Controller
         $municipality = $this->municipality($request);
         $data = $request->validate(['kind' => ['required', Rule::in(['chats', 'plans'])], 'page' => ['sometimes', 'integer', 'min:1', 'max:100000']]);
 
-        return $this->json($this->history->listing($request->user()->id, $municipality->id, $data['kind'], $data['page'] ?? 1));
+        return $this->json($this->readHistory($request, 'listing', ['municipality' => $municipality->id, ...$data],
+            fn () => $this->history->listing($request->user()->id, $municipality->id, $data['kind'], $data['page'] ?? 1)));
     }
 
     public function resume(Request $request, int $conversation): JsonResponse
@@ -113,7 +117,8 @@ class PlanningChatController extends Controller
     {
         $municipality = $this->municipality($request);
 
-        return $this->json(['plan' => $this->history->plan($request->user()->id, $municipality->id, $plan)]);
+        return $this->json($this->readHistory($request, 'plan', ['municipality' => $municipality->id, 'plan' => $plan],
+            fn () => ['plan' => $this->history->plan($request->user()->id, $municipality->id, $plan)]));
     }
 
     public function savePlan(Request $request): JsonResponse
@@ -130,7 +135,14 @@ class PlanningChatController extends Controller
     {
         $data = $request->validate(['page' => ['sometimes', 'integer', 'min:1', 'max:100000']]);
 
-        return $this->json($this->history->allPlans($request->user()->id, $data['page'] ?? 1));
+        return $this->json($this->readHistory($request, 'saved-plans', $data,
+            fn () => $this->history->allPlans($request->user()->id, $data['page'] ?? 1)));
+    }
+
+    private function readHistory(Request $request, string $name, array $parameters, callable $compute): array
+    {
+        return app(ReadCache::class)->remember('planning.'.$name, ['user' => $request->user()->getAuthIdentifier(), ...$parameters],
+            $compute, (int) config('read-cache.planning_ttl', 30), 'planning');
     }
 
     private function municipality(Request $request): Municipality

@@ -24,6 +24,119 @@ use Tests\TestCase;
 /** Isolated source-data regression fixtures; never migrate or change the live database. */
 class FunctionToolDataIntegrityTest extends TestCase
 {
+    public function test_explanation_inputs_are_the_counts_and_population_used_by_the_indicator(): void
+    {
+        $this->barangay(101, '0701232001');
+        $this->figure('0701232001', 'Bgy', 2024, 1000);
+        Schema::create('facilities', function (Blueprint $table) {
+            $table->id(); $table->integer('municipality_id'); $table->integer('barangay_id');
+            $table->string('sector'); $table->string('facility_type'); $table->string('level')->nullable();
+        });
+        DB::table('facilities')->insert(['municipality_id' => 11, 'barangay_id' => 101, 'sector' => 'health', 'facility_type' => 'hospital']);
+        $rows = collect(app(LocationAssessor::class)->assess(Municipality::findOrFail(11)))->keyBy(fn ($row) => $row->indicator->key);
+        $health = $rows['health_facilities_per_100k']->toArray();
+        $this->assertEquals(50, $health['value']);
+        $this->assertSame(['numerator' => 1, 'denominator' => 2000, 'multiplier' => 100000, 'population_year' => 2024], $health['calculation']);
+        $density = $rows['population_density']->toArray();
+        $this->assertEquals(20, $density['calculation']['denominator']);
+        $this->assertEquals(100, $density['value']);
+    }
+
+    public function test_intervention_explanations_report_actual_points_for_each_catalog(): void
+    {
+        $tool = app(MatchDostInterventionsTool::class);
+        $keywords = ['rice', 'crop', 'food', 'farming'];
+        $context = ['agriculture_commodities' => ['Rice']];
+        foreach ([
+            ['evaluateTechnologyRelevance', new \App\Models\Technology(['category' => 'Agriculture', 'name' => 'Rice crop food farming', 'active_status' => 'active']), 100, 25],
+            ['evaluateDostTechRelevance', new \App\Models\DostTech(['sector' => 'Agriculture', 'name' => 'Rice crop food farming', 'status' => 'active']), 100, 25],
+            ['evaluateProjectRelevance', new \App\Models\DostProject(['sector' => 'Agriculture', 'project_title' => 'Rice crop food farming']), 65, 20],
+        ] as [$method, $catalog, $expectedScore, $keywordPoints]) {
+            $score = (new ReflectionMethod($tool, $method))->invoke($tool, $catalog, 'agriculture', ['Agriculture'], $keywords, $context);
+            $this->assertSame($expectedScore, $score['relevance_score']);
+            $this->assertSame($keywordPoints, $score['score_breakdown']['keywords']);
+            $this->assertSame($method === 'evaluateProjectRelevance' ? 15 : 20, $score['score_breakdown']['base']);
+        }
+    }
+
+    public function test_assessment_cache_reuses_computation_and_refreshes_after_population_corrections(): void
+    {
+        config(['read-cache.enabled' => true, 'read-cache.store' => 'array']);
+        $municipality = Municipality::findOrFail(11);
+        $service = app(\App\Support\Assessment\MunicipalityAssessmentData::class);
+        $first = $service->props($municipality, 'general');
+        $this->assertSame(2000, $first['location']['population']);
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        $this->assertSame($first, $service->props($municipality, 'general'));
+        $this->assertSame([], DB::getQueryLog(), 'A warm assessment should not repeat its database computations.');
+        DB::table('population_figures')->where('psg_code', '0701232000')->update(['population' => 3000]);
+        $updated = $service->props($municipality->fresh(), 'general');
+        $this->assertSame(3000, $updated['location']['population']);
+        $this->assertEquals(150, collect($updated['results'])->keyBy('key')['population_density']['value']);
+    }
+
+    public function test_province_and_barangay_reports_generate_scoped_gaps_matches_and_ai_evidence(): void
+    {
+        $this->withoutVite();
+        $this->actingAs(new \App\Models\User(['id' => 1, 'role' => 'user']));
+        DB::table('provinces')->insert(['id' => 2, 'name' => 'Other province', 'psg_code' => '0702200000']);
+        DB::table('municipalities')->insert(['id' => 12, 'province_id' => 2, 'name' => 'Other city', 'psg_code' => '0702232000']);
+        $this->barangay(101, '0701232001');
+        $this->figure('0701200000', 'Prov', 2024, 2000);
+        $this->figure('0701232001', 'Bgy', 2024, 1000);
+        $this->figure('0702232000', 'Mun', 2024, 2000);
+        Schema::create('facilities', function (Blueprint $table) {
+            $table->id(); $table->integer('municipality_id'); $table->integer('barangay_id')->nullable();
+            foreach (['sector', 'facility_type', 'level'] as $column) {
+                $table->string($column)->nullable();
+            }
+        });
+        DB::table('facilities')->insert(['municipality_id' => 12, 'sector' => 'health', 'facility_type' => 'hospital']);
+        Schema::create('technologies', function (Blueprint $table) {
+            $table->id();
+            foreach (['code', 'name', 'category', 'description', 'active_status'] as $column) {
+                $table->string($column)->nullable();
+            }
+        });
+        DB::table('technologies')->insert(['code' => 'HEALTH-1', 'name' => 'Recorded health diagnostic technology',
+            'category' => 'Health', 'description' => 'Health diagnostic screening', 'active_status' => 'active']);
+
+        foreach ([['province', 1], ['barangay', 101]] as [$level, $id]) {
+            $params = ['level' => $level, 'location' => $id, 'map' => 'user'];
+            $report = $this->getJson(route('location.assess.data', $params))->assertOk()
+                ->assertJsonPath('functionToolsBundle.detected_gaps.location_level', $level)
+                ->assertJsonPath('functionToolsBundle.detected_gaps.location_id', $id)
+                ->assertJsonPath('functionToolsBundle.matched_interventions.location_level', $level)
+                ->assertJsonPath('functionToolsBundle.matched_interventions.location_id', $id)->json();
+            $gaps = collect($report['functionToolsBundle']['detected_gaps']['gaps'])->keyBy('indicator_key');
+            $this->assertEquals(0, $gaps['health_facilities_per_100k']['measured_value']);
+            $matches = collect($report['functionToolsBundle']['matched_interventions']['gap_interventions'])->keyBy('gap_id');
+            $this->assertSame('HEALTH-1', $matches['health_facilities_per_100k']['matched_interventions'][0]['intervention_id']);
+            $this->mock(\App\Support\Assessment\AssessmentAiService::class, function ($mock) use ($level, $id) {
+                $mock->shouldReceive('analyze')->once()->withArgs(fn ($evidence) =>
+                    $evidence['functionToolsBundle']['detected_gaps']['location_level'] === $level
+                    && $evidence['functionToolsBundle']['detected_gaps']['location_id'] === $id
+                )->andReturn(['status' => 'ready']);
+            });
+            $this->postJson(route('location.assess.ai'), [...$params, 'results' => [['value' => 999999]]])
+                ->assertOk()->assertJsonPath('status', 'ready');
+        }
+        $this->postJson(route('location.assess.ai'), ['level' => 'barangay', 'location' => 999])->assertNotFound();
+        $this->postJson(route('location.assess.ai'), ['level' => 'province', 'location' => 1, 'map' => 'admin'])->assertForbidden();
+    }
+
+    public function test_empty_gap_list_does_not_trigger_recomputation_or_generic_intervention_evaluation(): void
+    {
+        $this->mock(\App\FunctionTools\LayerC\DetectDevelopmentGapsTool::class, fn ($mock) => $mock->shouldNotReceive('forLocation'));
+        $matched = app(MatchDostInterventionsTool::class)->execute(['municipality_id' => 11, 'gaps' => []]);
+        $this->assertSame([], $matched['gap_interventions']);
+        $this->mock(MatchDostInterventionsTool::class, fn ($mock) => $mock->shouldReceive('execute')->once()->andReturn($matched));
+        $result = app(FunctionToolRegistry::class)->executeLayerE(Municipality::findOrFail(11));
+        $this->assertNull($result['feasibility_assessment']);
+        $this->assertNull($result['suitability_assessment']);
+    }
+
     public function test_distant_inventory_records_do_not_suppress_gaps_by_inflating_local_rates(): void
     {
         DB::table('municipalities')->where('id', 11)->update(['bounds' => '[9.7,9.8,123.7,123.9]']);
@@ -87,12 +200,12 @@ class FunctionToolDataIntegrityTest extends TestCase
     {
         $matcher = new class extends MatchDostInterventionsTool
         {
-            protected function gatherLocalContext(Municipality $municipality): array
+            protected function gatherLocalContext(\Illuminate\Database\Eloquent\Model $municipality): array
             {
                 return [];
             }
 
-            protected function findInterventionsForGap(array $gap, Municipality $municipality, array $localContext): array
+            protected function findInterventionsForGap(array $gap, \Illuminate\Database\Eloquent\Model $municipality, array $localContext): array
             {
                 return [];
             }

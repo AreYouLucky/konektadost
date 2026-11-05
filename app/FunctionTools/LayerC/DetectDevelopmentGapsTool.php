@@ -184,6 +184,7 @@ class DetectDevelopmentGapsTool implements FunctionToolInterface
                 'reference_year' => $result->indicator->referenceYear ?? 'Active Census',
                 'source' => $result->indicator->source,
                 'reason' => $result->reason,
+                'calculation' => $result->calculation,
             ];
         }
 

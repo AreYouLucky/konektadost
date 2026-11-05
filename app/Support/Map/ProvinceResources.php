@@ -6,6 +6,7 @@ use App\Models\CollectionYear;
 use App\Models\PlaceDescription;
 use App\Models\PopulationFigure;
 use App\Models\Province;
+use App\Support\Caching\ReadCache;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +15,12 @@ use Illuminate\Support\Facades\Schema;
 class ProvinceResources
 {
     public function summary(Province $province, GeographyExplorer $geography, ?GeographicScope $scope = null): array
+    {
+        return app(ReadCache::class)->remember('map.resources', ['province' => $province->id, 'scope' => $scope?->toArray()],
+            fn () => $this->buildSummary($province, $geography, $scope));
+    }
+
+    private function buildSummary(Province $province, GeographyExplorer $geography, ?GeographicScope $scope): array
     {
         $scope ??= GeographicScope::province($province);
         $municipalities = collect($geography->locations('municipality', (int) $province->id)['locations'])->keyBy('id');

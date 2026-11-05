@@ -30,4 +30,9 @@ class AssessmentReferenceData
     {
         unset($this->values[$this->key($name)]);
     }
+
+    public function clear(): void
+    {
+        $this->values = [];
+    }
 }

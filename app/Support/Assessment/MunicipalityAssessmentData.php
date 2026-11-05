@@ -5,6 +5,7 @@ namespace App\Support\Assessment;
 use App\FunctionTools\FunctionToolRegistry;
 use App\Models\CollectionYear;
 use App\Models\Municipality;
+use App\Support\Caching\ReadCache;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
@@ -13,7 +14,10 @@ class MunicipalityAssessmentData
 {
     public function props(Municipality $municipality, string $focus): array
     {
-        return app(AssessmentComputationCache::class)->within(fn () => $this->buildProps($municipality, $focus));
+        $this->validateFocus($focus);
+
+        return app(ReadCache::class)->remember('assessment.municipality', ['municipality' => $municipality, 'focus' => $focus],
+            fn () => app(AssessmentComputationCache::class)->within(fn () => $this->buildProps($municipality, $focus)));
     }
 
     private function buildProps(Municipality $municipality, string $focus): array

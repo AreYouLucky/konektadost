@@ -16,6 +16,7 @@ use App\Support\Assessment\AssessmentAiService;
 use App\Support\Assessment\MunicipalityAssessmentData;
 use App\Support\Assessment\ProjectCatalog;
 use App\Support\Map\MapAssessmentReport;
+use App\Support\Caching\ReadCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -43,7 +44,8 @@ class LocationController extends Controller
             ? null
             : Province::query()->where('psg_code', $provincePsgCode)->first();
 
-        return Inertia::render('location-map', [
+        return Inertia::render('location-map', app(ReadCache::class)->remember('location.map',
+            ['province' => $provincePsgCode, 'city' => $cityPsgCode], fn () => [
             'provinces' => Province::toGeoJsonCollection([
                 'psg_code',
                 'name',
@@ -72,7 +74,7 @@ class LocationController extends Controller
                 ]),
             'selectedCity' => $cityPsgCode !== '' ? $cityPsgCode : null,
             'mapMarkers' => $this->buildMapMarkers($province, $cityPsgCode),
-        ]);
+        ]));
     }
 
     /**
@@ -128,16 +130,26 @@ class LocationController extends Controller
         $focus = $request->string('focus')->trim()->toString();
         $focus = $focus === '' ? IndicatorCatalog::DIMENSION_GENERAL : $focus;
 
-        return response()->json([
+        app(MunicipalityAssessmentData::class)->validateFocus($focus);
+
+        return response()->json(app(ReadCache::class)->remember('location.assessment-data',
+            ['municipality' => $municipality, 'focus' => $focus], fn () => [
             ...app(MunicipalityAssessmentData::class)->props($municipality, $focus),
             'localLaboratories' => $this->buildLocalLaboratories($municipality),
             'dostInterventions' => $this->buildDostInterventions($municipality, $focus),
             'projectCatalog' => app(ProjectCatalog::class)->summary(),
-        ])->header('Cache-Control', 'private, no-store');
+        ]))->header('Cache-Control', 'private, no-store');
     }
 
     public function assessmentAi(Request $request, AssessmentAiService $ai): JsonResponse
     {
+        if ($request->hasAny(['level', 'location'])) {
+            $result = $ai->analyze(app(MapAssessmentReport::class)->props($request));
+
+            return response()->json($result, $result['status'] === 'ready' ? 200 : 503)
+                ->header('Cache-Control', 'private, no-store');
+        }
+
         $validated = $request->validate([
             'city' => ['required', 'string', 'regex:/^\d{10}$/'],
             'focus' => ['sometimes', 'string'],

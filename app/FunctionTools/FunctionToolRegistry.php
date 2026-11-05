@@ -33,6 +33,7 @@ use App\FunctionTools\LayerF\EstimateInterventionOutcomesTool;
 use App\FunctionTools\LayerF\GenerateActionPlanTool;
 use App\FunctionTools\LayerF\GenerateInterventionPlanTool;
 use Illuminate\Database\Eloquent\Model;
+use App\Support\Caching\ReadCache;
 use InvalidArgumentException;
 
 /**
@@ -143,7 +144,7 @@ class FunctionToolRegistry
             throw new InvalidArgumentException("Unknown Function Tool: {$toolName}");
         }
 
-        return $tools[$toolName]->execute($args);
+        return app(ReadCache::class)->remember('function-tool.'.$toolName, $args, fn () => $tools[$toolName]->execute($args));
     }
 
     /**
@@ -218,7 +219,13 @@ class FunctionToolRegistry
      */
     public function executeLayerE(Model $location, array $options = []): array
     {
-        $idArgs = ['municipality_id' => $location->id];
+        return app(ReadCache::class)->remember('assessment.layer-e', compact('location', 'options'),
+            fn () => $this->buildLayerE($location, $options));
+    }
+
+    private function buildLayerE(Model $location, array $options): array
+    {
+        $idArgs = ['location' => $location];
 
         $matched = app(MatchDostInterventionsTool::class)->execute($idArgs);
         $topIntervention = null;
@@ -233,6 +240,17 @@ class FunctionToolRegistry
 
         $interventionArg = $topIntervention ? ['intervention_id' => $topIntervention['intervention_id']] : [];
         $evalArgs = array_merge($idArgs, $interventionArg, $options);
+
+        // Keep screening results when detailed evaluation has no actual candidate or municipal baseline.
+        if (! $location instanceof \App\Models\Municipality || ($topIntervention === null && empty($options['intervention_id']))) {
+            return [
+                'matched_interventions' => $matched,
+                'suitability_assessment' => null,
+                'feasibility_assessment' => null,
+                'implementation_partners' => null,
+                'requirements_estimate' => null,
+            ];
+        }
 
         return [
             'matched_interventions' => $matched,
