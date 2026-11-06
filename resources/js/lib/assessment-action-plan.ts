@@ -1,4 +1,5 @@
 import type { AiResult } from '@/components/assessment-ai-analysis';
+import { assessmentDataSources, type AssessmentDataSource } from './assessment-data-sources';
 import { explainNumber } from './assessment-explanations';
 import {
     reportGaps,
@@ -12,7 +13,7 @@ import {
     type AssessmentReportInput,
     type OverviewChart,
 } from './assessment-report';
-import { buildTargetAreas } from './assessment-targets';
+import { buildTargetAreas, type TargetAreaSet } from './assessment-targets';
 
 export const actionPlanColumns = ['ACTIVITIES', 'OBJECTIVES', 'RESULTS', 'TIMELINE', 'BUDGET/RESOURCES', 'RESPONSIBLE (PERSON/OFFICE)'] as const;
 export interface ActionPlanActivity {
@@ -278,9 +279,32 @@ export function buildAssessmentActionPlan(report: AssessmentReportInput, analysi
     };
 }
 
-export function actionPlanFilename(report: AssessmentReportInput, date = new Date()) {
+/**
+ * Everything the action plan view and PDF need, without the full assessment report. This is what
+ * gets saved, so a stored plan reopens and downloads exactly as it was generated.
+ */
+export interface ActionPlanSnapshot {
+    schema: 1;
+    plan: AssessmentActionPlan;
+    /** Ranked target areas with their per-factor points (the stacked-bar chart). */
+    targets: TargetAreaSet | null;
+    province: string | null;
+    sources: AssessmentDataSource[];
+}
+
+export function buildActionPlanSnapshot(report: AssessmentReportInput, analysis?: AiResult, date = new Date()): ActionPlanSnapshot {
+    return {
+        schema: 1,
+        plan: buildAssessmentActionPlan(report, analysis, date),
+        targets: buildTargetAreas(report, 10),
+        province: report.location.province ?? null,
+        sources: assessmentDataSources(report),
+    };
+}
+
+export function actionPlanFilename(location: AssessmentReportInput | string, date = new Date()) {
     const name =
-        report.location.name
+        (typeof location === 'string' ? location : location.location.name)
             .normalize('NFKD')
             .replace(/[^\p{L}\p{N}]+/gu, '-')
             .replace(/^-|-$/g, '')

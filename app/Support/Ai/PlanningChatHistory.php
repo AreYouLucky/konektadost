@@ -3,8 +3,10 @@
 namespace App\Support\Ai;
 
 use App\Models\Municipality;
+use App\Support\Assessment\AssessmentActionPlans;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use stdClass;
 
 /** Persistence for assistant activity without introducing additional domain models. */
@@ -155,14 +157,20 @@ class PlanningChatHistory
         return [...(array) $plan, 'visuals' => $plan->visuals ? json_decode($plan->visuals, true) : []];
     }
 
+    /** The account's chat plans and assessment-page plans, newest first. `kind` tells the client how to open each. */
     public function allPlans(int $userId, int $page): array
     {
-        $rows = DB::table('planning_action_plans as plans')
+        $chat = DB::table('planning_action_plans as plans')
             ->join('planning_conversations as chats', 'chats.id', '=', 'plans.conversation_id')
             ->join('municipalities as places', 'places.id', '=', 'chats.municipality_id')
             ->where('chats.user_id', $userId)
-            ->select(['plans.id', 'plans.title', 'plans.version', 'plans.created_at', 'places.psg_code as city', 'places.name as municipality'])
-            ->orderByDesc('plans.id')->offset(($page - 1) * 10)->limit(11)->get();
+            ->selectRaw("'chat' as kind, plans.id, plans.title, plans.version, plans.created_at, places.psg_code as city, places.name as municipality");
+        $query = Schema::hasTable(AssessmentActionPlans::TABLE)
+            ? $chat->unionAll(DB::table(AssessmentActionPlans::TABLE)->where('user_id', $userId)
+                ->selectRaw("'assessment' as kind, id, title, version, created_at, psg_code as city, location_name as municipality"))
+                ->orderByDesc('created_at')->orderByDesc('id')
+            : $chat->orderByDesc('plans.id');
+        $rows = $query->offset(($page - 1) * 10)->limit(11)->get();
 
         return ['items' => $rows->take(10)->values()->all(), 'next_page' => $rows->count() > 10 ? $page + 1 : null];
     }

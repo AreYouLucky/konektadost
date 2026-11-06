@@ -1,6 +1,7 @@
+import AssessmentProgress from '@/components/assessment-progress';
 import { Button } from '@/components/ui/button';
 import * as Dialog from '@radix-ui/react-dialog';
-import { ChartNoAxesCombined, ClipboardList, LoaderCircle, MapPin, Users } from 'lucide-react';
+import { ClipboardList, LoaderCircle, MapPin } from 'lucide-react';
 
 export default function AssessmentLoading({ open, onCancel }: { open: boolean; onCancel: () => void }) {
     return (
@@ -30,28 +31,12 @@ export default function AssessmentLoading({ open, onCancel }: { open: boolean; o
                         <ClipboardList className="size-9 text-[#087dcc]" strokeWidth={1.5} aria-hidden="true" />
                     </div>
 
-                    <Dialog.Title className="text-2xl font-semibold tracking-tight text-slate-900">Generating assessment…</Dialog.Title>
-                    <Dialog.Description className="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-slate-500">
-                        Preparing the latest local profile, indicators, and assessment summary. Detailed locations may take a little longer.
+                    <Dialog.Title className="text-2xl font-semibold tracking-tight text-slate-900">Analyzing the selected area</Dialog.Title>
+                    <Dialog.Description className="sr-only">
+                        Generating the assessment: local profile, resource counts, national comparisons, gaps and DOST technology matches.
                     </Dialog.Description>
 
-                    <div
-                        className="mt-7 grid grid-cols-3 gap-2 rounded-2xl bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-600 sm:gap-4 sm:p-4"
-                        aria-hidden="true"
-                    >
-                        <div className="flex flex-col items-center gap-2">
-                            <Users className="size-5 text-[#087dcc]" strokeWidth={1.6} />
-                            Local profile
-                        </div>
-                        <div className="flex flex-col items-center gap-2">
-                            <ChartNoAxesCombined className="size-5 text-[#087dcc]" strokeWidth={1.6} />
-                            Indicator comparison
-                        </div>
-                        <div className="flex flex-col items-center gap-2">
-                            <ClipboardList className="size-5 text-[#087dcc]" strokeWidth={1.6} />
-                            Assessment summary
-                        </div>
-                    </div>
+                    <AssessmentProgress active={open} className="mx-auto mt-6 max-w-sm" />
 
                     <p role="status" className="mt-6 text-xs leading-relaxed text-slate-500">
                         Your report will open automatically when it’s ready.

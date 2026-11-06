@@ -20,7 +20,7 @@ class ReadCache
         'dost_projects', 'dost_techs', 'technologies', 'roads', 'road_barangay',
     ];
 
-    private const PLANNING_TABLES = ['planning_conversations', 'planning_messages', 'planning_action_plans'];
+    private const PLANNING_TABLES = ['planning_conversations', 'planning_messages', 'planning_action_plans', 'assessment_action_plans'];
 
     public function remember(string $name, array $parameters, callable $compute, ?int $ttl = null, string $group = 'domain'): mixed
     {

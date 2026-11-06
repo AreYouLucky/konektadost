@@ -11,12 +11,12 @@ use App\Models\Municipality;
 use App\Models\PlaceDescription;
 use App\Models\Province;
 use App\Models\TelecomSite;
-use App\Support\Assessment\IndicatorCatalog;
 use App\Support\Assessment\AssessmentAiService;
+use App\Support\Assessment\IndicatorCatalog;
 use App\Support\Assessment\MunicipalityAssessmentData;
 use App\Support\Assessment\ProjectCatalog;
-use App\Support\Map\MapAssessmentReport;
 use App\Support\Caching\ReadCache;
+use App\Support\Map\MapAssessmentReport;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -46,35 +46,35 @@ class LocationController extends Controller
 
         return Inertia::render('location-map', app(ReadCache::class)->remember('location.map',
             ['province' => $provincePsgCode, 'city' => $cityPsgCode], fn () => [
-            'provinces' => Province::toGeoJsonCollection([
-                'psg_code',
-                'name',
-                'variant_name',
-                'english_type',
-                'cc_code',
-                'center_lat',
-                'center_lng',
-            ]),
-            'selectedProvince' => $province?->psg_code,
-            // Only ever built for the one province being drilled into, so this
-            // stays small (17 KB for Metro Manila, ~165 KB worst case).
-            //
-            // Deliberately NOT Inertia::optional(): optional props are dropped
-            // from full page loads, which would leave a bookmarked or shared
-            // /location?province=... link rendering with no cities at all.
-            'municipalities' => $province === null
-                ? null
-                : Municipality::toGeoJsonCollectionForProvince((int) $province->id, [
+                'provinces' => Province::toGeoJsonCollection([
                     'psg_code',
                     'name',
-                    'type',
-                    'province_name',
+                    'variant_name',
+                    'english_type',
+                    'cc_code',
                     'center_lat',
                     'center_lng',
                 ]),
-            'selectedCity' => $cityPsgCode !== '' ? $cityPsgCode : null,
-            'mapMarkers' => $this->buildMapMarkers($province, $cityPsgCode),
-        ]));
+                'selectedProvince' => $province?->psg_code,
+                // Only ever built for the one province being drilled into, so this
+                // stays small (17 KB for Metro Manila, ~165 KB worst case).
+                //
+                // Deliberately NOT Inertia::optional(): optional props are dropped
+                // from full page loads, which would leave a bookmarked or shared
+                // /location?province=... link rendering with no cities at all.
+                'municipalities' => $province === null
+                    ? null
+                    : Municipality::toGeoJsonCollectionForProvince((int) $province->id, [
+                        'psg_code',
+                        'name',
+                        'type',
+                        'province_name',
+                        'center_lat',
+                        'center_lng',
+                    ]),
+                'selectedCity' => $cityPsgCode !== '' ? $cityPsgCode : null,
+                'mapMarkers' => $this->buildMapMarkers($province, $cityPsgCode),
+            ]));
     }
 
     /**
@@ -134,11 +134,11 @@ class LocationController extends Controller
 
         return response()->json(app(ReadCache::class)->remember('location.assessment-data',
             ['municipality' => $municipality, 'focus' => $focus], fn () => [
-            ...app(MunicipalityAssessmentData::class)->props($municipality, $focus),
-            'localLaboratories' => $this->buildLocalLaboratories($municipality),
-            'dostInterventions' => $this->buildDostInterventions($municipality, $focus),
-            'projectCatalog' => app(ProjectCatalog::class)->summary(),
-        ]))->header('Cache-Control', 'private, no-store');
+                ...app(MunicipalityAssessmentData::class)->props($municipality, $focus),
+                'localLaboratories' => $this->buildLocalLaboratories($municipality),
+                'dostInterventions' => $this->buildDostInterventions($municipality, $focus),
+                'projectCatalog' => app(ProjectCatalog::class)->summary(),
+            ]))->header('Cache-Control', 'private, no-store');
     }
 
     public function assessmentAi(Request $request, AssessmentAiService $ai): JsonResponse
@@ -450,8 +450,10 @@ class LocationController extends Controller
         }
 
         return $query->get()->map(function (Laboratory $lab) use ($hasLabServices) {
+            // `laboratories.services` is also a JSON column (cast to array), and a column wins over a
+            // relation of the same name in `$lab->services`, so read the eager-loaded relation directly.
             $services = $hasLabServices
-                ? $lab->services
+                ? $lab->getRelation('services')
                     ->map(fn ($s) => [
                         'test_name' => $s->service_name ?? $s->test_name ?? $s->name ?? 'Service',
                         'method' => $s->description ?? $s->method ?? null,

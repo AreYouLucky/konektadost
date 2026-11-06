@@ -3,6 +3,7 @@
 namespace App\Support\Dashboard;
 
 use App\Models\User;
+use App\Support\Assessment\AssessmentActionPlans;
 use App\Support\Assessment\IndicatorCatalog;
 use App\Support\Caching\ReadCache;
 use Illuminate\Support\Facades\DB;
@@ -103,22 +104,26 @@ class UserDashboardData
         }
 
         $chats = DB::table('planning_conversations')->where('user_id', $user->id);
+        $assessmentPlans = app(AssessmentActionPlans::class);
+        $chatPlans = DB::table('planning_action_plans as plans')
+            ->join('planning_conversations as chats', 'chats.id', '=', 'plans.conversation_id')
+            ->join('municipalities as places', 'places.id', '=', 'chats.municipality_id')
+            ->where('chats.user_id', $user->id)
+            ->orderByDesc('plans.id')->limit(50)
+            ->get(['plans.id', 'plans.title', 'plans.version', 'plans.status', 'plans.created_at', 'places.psg_code as city', 'places.name as municipality', 'places.province_name as province'])
+            ->map(fn ($row) => ['kind' => 'chat', ...(array) $row])->all();
 
         return [
             'totals' => [
                 'plans' => DB::table('planning_action_plans as plans')
                     ->join('planning_conversations as chats', 'chats.id', '=', 'plans.conversation_id')
-                    ->where('chats.user_id', $user->id)->count(),
+                    ->where('chats.user_id', $user->id)->count() + $assessmentPlans->count($user->id),
                 'conversations' => (clone $chats)->count(),
                 'municipalities' => (clone $chats)->distinct()->count('municipality_id'),
             ],
-            'recentPlans' => DB::table('planning_action_plans as plans')
-                ->join('planning_conversations as chats', 'chats.id', '=', 'plans.conversation_id')
-                ->join('municipalities as places', 'places.id', '=', 'chats.municipality_id')
-                ->where('chats.user_id', $user->id)
-                ->orderByDesc('plans.id')->limit(50)
-                ->get(['plans.id', 'plans.title', 'plans.version', 'plans.status', 'plans.created_at', 'places.psg_code as city', 'places.name as municipality', 'places.province_name as province'])
-                ->map(fn ($row) => (array) $row)->all(),
+            // Chat plans and assessment-page plans together, newest first.
+            'recentPlans' => collect([...$chatPlans, ...$assessmentPlans->recent($user->id, 50)])
+                ->sortByDesc(fn (array $row) => [(string) $row['created_at'], $row['id']])->take(50)->values()->all(),
             'recentConversations' => DB::table('planning_conversations as chats')
                 ->join('municipalities as places', 'places.id', '=', 'chats.municipality_id')
                 ->where('chats.user_id', $user->id)

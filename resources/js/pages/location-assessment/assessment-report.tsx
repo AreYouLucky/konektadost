@@ -16,6 +16,7 @@ import AssessmentNavigation, { ASSESSMENT_SECTIONS } from './assessment-navigati
 import { DostTechnologiesCatalogSection, LocalDostProjectsSection } from './dost-catalog';
 import LaboratorySupport from './laboratory-support';
 import { LocationFacts } from './location-overview';
+import { NeedsSummary } from './needs-summary';
 import { BarangayPrioritySection } from './priority-areas';
 import { DatasetAuditSection } from './profile-assets';
 import { RoadAccessibilityCard, TelecomConnectivityCard, UnifiedIndicatorsTable } from './sector-needs';
@@ -96,6 +97,7 @@ export function LocationAssessmentReport(report: AssessmentPageProps) {
 
                 <AssessmentNotices report={report} />
                 <AtAGlance report={report} onOpen={openStep} />
+                <NeedsSummary report={report} onOpen={openStep} />
                 <AssessmentNavigation ref={navRef} active={activeSection} onChange={setActiveSection} counts={counts} />
 
                 <div className="min-w-0 space-y-6">

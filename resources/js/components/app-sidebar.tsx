@@ -1,3 +1,4 @@
+import { DostLogo } from '@/components/dost-logo';
 import { NavUser } from '@/components/nav-user';
 import { PlanningChatLauncher } from '@/components/planning-chat';
 import { PlanningSavedPlans } from '@/components/planning-saved-plans';
@@ -15,7 +16,7 @@ import {
     SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { Link, usePage } from '@inertiajs/react';
-import { ArrowUpRight, ChevronRight, Globe2, LayoutGrid, MapPin, UserRound } from 'lucide-react';
+import { ArrowUpRight, ChevronRight, Globe2, LayoutGrid, UserRound } from 'lucide-react';
 
 /**
  * Sidebar for standard (non-admin) users.
@@ -46,8 +47,8 @@ export function AppSidebar() {
                             className="h-12 min-w-0 flex-1 rounded-xl p-0 group-data-[collapsible=icon]:flex-none hover:bg-blue-50"
                         >
                             <Link href="/dashboard" prefetch>
-                                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-blue-100 bg-blue-50 text-[#087dcc] group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:rounded-lg">
-                                    <MapPin className="size-5" strokeWidth={1.8} aria-hidden="true" />
+                                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-blue-100 bg-white group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:rounded-lg">
+                                    <DostLogo variant="mark" className="h-6 group-data-[collapsible=icon]:h-5" />
                                 </div>
                                 <span className="ml-1 flex min-w-0 flex-col gap-1 group-data-[collapsible=icon]:hidden">
                                     <span className="truncate text-base font-semibold tracking-tight text-slate-900">KonektaDOST</span>

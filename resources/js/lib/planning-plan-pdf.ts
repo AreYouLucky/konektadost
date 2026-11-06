@@ -1,10 +1,11 @@
 import { jsPDF } from 'jspdf';
 import { autoTable, type RowInput } from 'jspdf-autotable';
 import { loadAssessmentPdfFonts, pdfText, type PdfFonts } from './assessment-pdf';
+import { drawPdfLogo, loadDostLogoDataUrl } from './dost-logo';
 import { actionPlanColumns, parsePlanningPlan, planningPlanFilename, planningPlanSources, type PlanningPlanSnapshot } from './planning-plan';
 
 /** Export the selected chat/saved version itself, including its stored evidence, without regenerating it. */
-export function createPlanningPlanPdf(snapshot: PlanningPlanSnapshot, fonts: PdfFonts, date = new Date()) {
+export function createPlanningPlanPdf(snapshot: PlanningPlanSnapshot, fonts: PdfFonts, date = new Date(), logo: string | null = null) {
     const plan = parsePlanningPlan(snapshot);
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true, putOnlyUsedFonts: true });
     doc.addFileToVFS('NotoSans-Regular.ttf', fonts.regular);
@@ -67,6 +68,8 @@ export function createPlanningPlanPdf(snapshot: PlanningPlanSnapshot, fonts: Pdf
         });
         y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 7;
     }
+    const logoHeight = drawPdfLogo(doc, logo, margin, 10, 62);
+    if (logoHeight) y = 10 + logoHeight + 9;
     paragraph(plan.title, 17, true);
     paragraph(
         `${snapshot.location}${snapshot.province ? ` · ${snapshot.province}` : ''}${snapshot.version ? ` · Version ${snapshot.version}` : ''} · Draft pending local validation`,
@@ -188,6 +191,8 @@ export function createPlanningPlanPdf(snapshot: PlanningPlanSnapshot, fonts: Pdf
     );
     for (let index = 1; index <= doc.getNumberOfPages(); index++) {
         doc.setPage(index);
+        // Page 1 carries the full letterhead; later pages get a smaller logo in the top-right corner.
+        if (index > 1) drawPdfLogo(doc, logo, 283 - 30, 5, 30);
         doc.setFont('NotoSans', 'normal');
         doc.setFontSize(7);
         doc.setTextColor(100, 116, 139);
@@ -198,6 +203,6 @@ export function createPlanningPlanPdf(snapshot: PlanningPlanSnapshot, fonts: Pdf
 }
 
 export async function downloadPlanningPlanPdf(snapshot: PlanningPlanSnapshot) {
-    const fonts = await loadAssessmentPdfFonts();
-    await createPlanningPlanPdf(snapshot, fonts).save(planningPlanFilename(snapshot), { returnPromise: true });
+    const [fonts, logo] = await Promise.all([loadAssessmentPdfFonts(), loadDostLogoDataUrl()]);
+    await createPlanningPlanPdf(snapshot, fonts, new Date(), logo).save(planningPlanFilename(snapshot), { returnPromise: true });
 }

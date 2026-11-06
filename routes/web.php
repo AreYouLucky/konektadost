@@ -2,20 +2,27 @@
 
 use App\Http\Controllers\Admin\Data\ImportController;
 use App\Http\Controllers\Admin\Data\PopulationController;
+use App\Http\Controllers\Admin\DataEntryController;
 use App\Http\Controllers\Admin\MapMarkersController;
 use App\Http\Controllers\Admin\ProvinceAgricultureController;
 use App\Http\Controllers\Admin\ProvinceResourcesController;
 use App\Http\Controllers\Admin\SearchMapController;
+use App\Http\Controllers\AssessmentActionPlanController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\LocationRoadsController;
 use App\Http\Controllers\PlanningChatController;
 use App\Http\Controllers\UserDashboardController;
+use App\Http\Controllers\WelcomeController;
+use App\Support\Dashboard\AdminDashboardData;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-Route::get('/', function () {
-    return Inertia::render('welcome');
-})->name('home');
+Route::get('/', WelcomeController::class)->name('home');
+
+// Current CSRF token for long-lived pages whose server-rendered token went stale (login, logout,
+// another tab). Same-origin JSON only; the fetch helper retries a 419 once with this token.
+Route::get('csrf-token', fn () => response()->json(['token' => csrf_token()])->header('Cache-Control', 'private, no-store'))
+    ->middleware('throttle:60,1')->name('csrf-token');
 
 Route::middleware(['auth'])->group(function () {
     Route::get('dashboard', UserDashboardController::class)->name('user.dashboard.index');
@@ -24,6 +31,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('location/assess', [LocationController::class, 'assess'])->name('location.assess');
     Route::get('location/assess/data', [LocationController::class, 'assessmentData'])->middleware('throttle:30,1')->name('location.assess.data');
     Route::post('location/assess/ai', [LocationController::class, 'assessmentAi'])->middleware('throttle:6,1')->name('location.assess.ai');
+    Route::post('location/assess/plans', [AssessmentActionPlanController::class, 'store'])->middleware('throttle:30,1')->name('location.assess.plans.store');
+    Route::get('location/assess/plans/{plan}', [AssessmentActionPlanController::class, 'show'])->whereNumber('plan')->middleware('throttle:60,1')->name('location.assess.plans.show');
 
     Route::prefix('planning-chat')->name('planning-chat.')->group(function () {
         Route::get('locations', [PlanningChatController::class, 'locations'])->middleware('throttle:60,1')->name('locations');
@@ -76,9 +85,18 @@ Route::middleware(['auth'])
                 });
             });
 
-            Route::get('dashboard', function () {
-                return Inertia::render('admin/dashboard');
-            })->name('dashboard.index');
+            Route::get('dashboard', fn (AdminDashboardData $dashboard) => Inertia::render('admin/dashboard', $dashboard->props()))
+                ->name('dashboard.index');
+
+            // Reference-data CRUD for every sector (see App\Support\DataEntries\DataEntryRegistry).
+            Route::prefix('data-entries')->name('data-entries.')->controller(DataEntryController::class)->group(function () {
+                Route::get('/', 'index')->name('index');
+                Route::get('locate', 'locate')->middleware('throttle:60,1')->name('locate');
+                Route::get('{resource}', 'show')->where('resource', '[a-z-]+')->name('show');
+                Route::post('{resource}', 'store')->where('resource', '[a-z-]+')->middleware('throttle:60,1')->name('store');
+                Route::put('{resource}/{id}', 'update')->where('resource', '[a-z-]+')->whereNumber('id')->middleware('throttle:60,1')->name('update');
+                Route::delete('{resource}/{id}', 'destroy')->where('resource', '[a-z-]+')->whereNumber('id')->middleware('throttle:60,1')->name('destroy');
+            });
         });
 
         // Reference data. Technicians maintain datasets; only admins reach the

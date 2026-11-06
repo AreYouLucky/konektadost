@@ -1,7 +1,8 @@
-import { Head, Link, useForm } from '@inertiajs/react';
-import { ArrowRight, Cpu, Eye, EyeOff, FlaskConical, LoaderCircle, Lock, Mail, MapPin, Radio, ShieldCheck } from 'lucide-react';
+import { Head, useForm } from '@inertiajs/react';
+import { ArrowRight, Cpu, Eye, EyeOff, FlaskConical, LoaderCircle, Lock, Mail, MapPin, Radio } from 'lucide-react';
 import { FormEventHandler, useState } from 'react';
 
+import { AuthBrandPanel, AuthMobileBrand } from '@/components/auth-brand-panel';
 import InputError from '@/components/input-error';
 import TextLink from '@/components/text-link';
 import { Button } from '@/components/ui/button';
@@ -41,25 +42,21 @@ export default function Login({ status, canResetPassword }: LoginProps) {
             icon: MapPin,
             title: 'Barangay-Level Spatial Gap Analysis',
             description: 'Pinpoint high-population, underserved barangays using PSA 2024 census figures and infrastructure layers.',
-            color: 'text-teal-300 bg-teal-500/15 border-teal-400/20',
         },
         {
             icon: FlaskConical,
             title: 'DOST OneLab & Testing Directory',
             description: 'Locate accredited testing and calibration laboratories alongside their registered chemical and microbiological services.',
-            color: 'text-emerald-300 bg-emerald-500/15 border-emerald-400/20',
         },
         {
             icon: Cpu,
             title: 'Evidence-Based DOST Tech Matching',
             description: 'Match local service shortfalls to catalogued DOST technologies, lead agencies, and measurable community outcomes.',
-            color: 'text-violet-300 bg-violet-500/15 border-violet-400/20',
         },
         {
             icon: Radio,
             title: 'Connectivity & DRR Readiness',
             description: 'Evaluate 4G/5G cell site density and emergency safety facilities per 100,000 residents across LGUs.',
-            color: 'text-amber-300 bg-amber-500/15 border-amber-400/20',
         },
     ];
 
@@ -68,99 +65,40 @@ export default function Login({ status, canResetPassword }: LoginProps) {
             <Head title="Sign in — KonektaDOST" />
 
             <div className="bg-background grid min-h-dvh lg:grid-cols-[1.1fr_0.9fr]">
-                {/* Left Hero Panel */}
-                <div className="relative hidden flex-col justify-between overflow-hidden bg-slate-950 p-10 text-white lg:flex xl:p-14">
-                    {/* Ambient radial gradients & grid */}
-                    <div
-                        className="pointer-events-none absolute inset-0 opacity-35"
-                        style={{
-                            backgroundImage:
-                                'radial-gradient(circle at 18% 20%, rgba(13, 148, 136, 0.45), transparent 45%), radial-gradient(circle at 85% 80%, rgba(124, 58, 237, 0.35), transparent 50%)',
-                        }}
-                    />
-                    <div
-                        className="pointer-events-none absolute inset-0 opacity-10"
-                        style={{
-                            backgroundImage:
-                                'linear-gradient(to right, rgba(255,255,255,0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.12) 1px, transparent 1px)',
-                            backgroundSize: '36px 36px',
-                        }}
-                    />
-
-                    {/* Brand Header */}
-                    <div className="relative z-10 flex items-center justify-between">
-                        <Link href={route('home')} className="flex items-center gap-3">
-                            <div className="flex size-10 items-center justify-center rounded-xl border border-teal-400/30 bg-teal-500/20 text-teal-300 shadow-inner">
-                                <MapPin className="size-5" />
-                            </div>
-                            <div className="flex flex-col">
-                                <span className="text-lg font-bold tracking-tight text-white">KonektaDOST</span>
-                                <span className="text-[11px] font-medium tracking-wider text-teal-300/90 uppercase">
-                                    Spatial STI Decision Support
-                                </span>
-                            </div>
-                        </Link>
-
-                        <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-slate-300 backdrop-blur">
-                            <ShieldCheck className="size-3.5 text-teal-400" />
-                            DOST Service Area Intelligence
-                        </span>
+                <AuthBrandPanel>
+                    <div className="max-w-xl space-y-3">
+                        <h1 className="text-3xl leading-tight font-bold tracking-tight text-white xl:text-4xl">
+                            Connect every community to the right <span className="text-sky-200">DOST intervention.</span>
+                        </h1>
+                        <p className="text-sm leading-relaxed text-sky-50/85 xl:text-base">
+                            Analyze city and barangay baselines across population, healthcare, education, digital connectivity, and laboratory
+                            capacity to guide science and technology deployment.
+                        </p>
                     </div>
 
-                    {/* Center Copy + Feature Cards */}
-                    <div className="relative z-10 my-auto flex flex-col gap-8 py-8">
-                        <div className="max-w-xl space-y-3">
-                            <h1 className="text-3xl leading-tight font-bold tracking-tight text-white xl:text-4xl">
-                                Connect every community to the right{' '}
-                                <span className="bg-gradient-to-r from-teal-300 via-emerald-300 to-cyan-300 bg-clip-text text-transparent">
-                                    DOST intervention.
-                                </span>
-                            </h1>
-                            <p className="text-sm leading-relaxed text-slate-300/90 xl:text-base">
-                                Analyze city and barangay baselines across population, healthcare, education, digital connectivity, and laboratory
-                                capacity to guide science and technology deployment.
-                            </p>
-                        </div>
-
-                        <div className="grid gap-3.5 sm:grid-cols-2">
-                            {features.map((item) => {
-                                const Icon = item.icon;
-                                return (
-                                    <div
-                                        key={item.title}
-                                        className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/[0.04] p-4 backdrop-blur-xs transition-colors hover:bg-white/[0.07]"
-                                    >
-                                        <div className={` flex size-8 items-center justify-center rounded-lg border ${item.color}`}>
-                                            <Icon className="size-4" />
-                                        </div>
-                                        <h3 className="text-sm font-semibold text-white">{item.title}</h3>
-                                        <p className="text-xs leading-relaxed text-slate-300/80">{item.description}</p>
+                    <div className="grid gap-3.5 sm:grid-cols-2">
+                        {features.map((item) => {
+                            const Icon = item.icon;
+                            return (
+                                <div
+                                    key={item.title}
+                                    className="flex flex-col gap-2 rounded-xl border border-white/15 bg-white/7 p-4 backdrop-blur-xs transition-colors hover:bg-white/11"
+                                >
+                                    <div className="flex size-8 items-center justify-center rounded-lg border border-white/20 bg-white/15 text-sky-100">
+                                        <Icon className="size-4" />
                                     </div>
-                                );
-                            })}
-                        </div>
+                                    <h3 className="text-sm font-semibold text-white">{item.title}</h3>
+                                    <p className="text-xs leading-relaxed text-sky-50/75">{item.description}</p>
+                                </div>
+                            );
+                        })}
                     </div>
-
-                    {/* Footer */}
-                    <div className="relative z-10 flex items-center justify-between border-t border-white/10 pt-5 text-xs text-slate-400">
-                        <span>PSA 2024 Census · OpenStreetMap · DOST OneLab · NCR Tech Catalogue</span>
-                        <span>v1.0</span>
-                    </div>
-                </div>
+                </AuthBrandPanel>
 
                 {/* Right Login Form Panel */}
                 <div className="flex flex-col justify-center px-6 py-10 sm:px-12 lg:px-16">
                     <div className="mx-auto flex w-full max-w-md flex-col gap-7">
-                        {/* Mobile Brand Header */}
-                        <div className="flex items-center gap-3 lg:hidden">
-                            <div className="flex size-10 items-center justify-center rounded-xl bg-teal-600 text-white shadow-sm">
-                                <MapPin className="size-5" />
-                            </div>
-                            <div className="flex flex-col">
-                                <span className="text-lg font-bold tracking-tight">KonektaDOST</span>
-                                <span className="text-muted-foreground text-xs">Spatial STI Decision Support</span>
-                            </div>
-                        </div>
+                        <AuthMobileBrand />
 
                         {/* Heading */}
                         <div className="flex flex-col gap-1.5">
@@ -171,7 +109,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                         </div>
 
                         {status && (
-                            <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                            <div className="rounded-lg border border-[#087dcc]/25 bg-blue-50 px-4 py-3 text-sm font-medium text-[#086bb0] dark:bg-[#087dcc]/15 dark:text-sky-200">
                                 {status}
                             </div>
                         )}
@@ -192,7 +130,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                                         value={data.email}
                                         onChange={(e) => setData('email', e.target.value)}
                                         placeholder="name@mail.dev"
-                                        className="h-10 pl-9"
+                                        className="h-10 pl-9 focus-visible:border-[#087dcc] focus-visible:ring-[#087dcc]/25"
                                     />
                                 </div>
                                 <InputError message={errors.email} />
@@ -218,7 +156,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                                         value={data.password}
                                         onChange={(e) => setData('password', e.target.value)}
                                         placeholder="Enter your password"
-                                        className="h-10 pr-10 pl-9"
+                                        className="h-10 pr-10 pl-9 focus-visible:border-[#087dcc] focus-visible:ring-[#087dcc]/25"
                                     />
                                     <button
                                         type="button"
@@ -240,6 +178,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                                         checked={data.remember}
                                         onClick={() => setData('remember', !data.remember)}
                                         tabIndex={3}
+                                        className="data-[state=checked]:border-[#087dcc] data-[state=checked]:bg-[#087dcc] data-[state=checked]:text-white"
                                     />
                                     <Label htmlFor="remember" className="cursor-pointer text-sm font-normal">
                                         Keep me signed in
@@ -249,7 +188,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
 
                             <Button
                                 type="submit"
-                                className="h-10 w-full gap-2 bg-teal-600 text-white hover:bg-teal-700"
+                                className="h-10 w-full gap-2 bg-[#087dcc] text-white hover:bg-[#086bb0] focus-visible:ring-[#087dcc]/40"
                                 tabIndex={4}
                                 disabled={processing}
                             >
@@ -265,7 +204,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
 
                             <div className="text-muted-foreground border-t pt-4 text-center text-sm">
                                 Don&apos;t have an account yet?{' '}
-                                <TextLink href={route('register')} tabIndex={6} className="font-medium text-teal-600 dark:text-teal-400">
+                                <TextLink href={route('register')} tabIndex={6} className="font-medium text-[#087dcc] dark:text-sky-300">
                                     Create an account
                                 </TextLink>
                             </div>

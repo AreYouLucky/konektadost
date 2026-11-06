@@ -1,5 +1,7 @@
 # Map marker diagnosis — 2026-10-27
 
+> **Resolved 2026-11-06.** The stored links pointed at the legacy `old_municipalities`/`old_barangays` IDs (their foreign keys still referenced those tables). `php artisan resources:relink-locations --apply` rebuilt them from coordinates (cell sites from their source barangay PSGC): 19,529 facilities now sit in the municipality polygon that contains them, 122 with coordinates outside every polygon are unlinked (NULL). Foreign keys now reference `municipalities`/`barangays`. Inventories and assessments now agree with the map. The analysis below describes the state before the fix.
+
 The marker renderer and visibility controls work. The current imported resource location links are inconsistent with the current geography tables, so scoped queries exclude resources from their real area or return coordinates outside the selected viewport.
 
 ## Confirmed examples

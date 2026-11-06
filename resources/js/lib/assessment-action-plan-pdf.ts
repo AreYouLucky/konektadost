@@ -1,12 +1,18 @@
 import type { AiResult } from '@/components/assessment-ai-analysis';
 import { jsPDF } from 'jspdf';
 import { autoTable, type RowInput } from 'jspdf-autotable';
-import { actionPlanColumns, actionPlanFilename, buildAssessmentActionPlan, type ActionPlanActivity } from './assessment-action-plan';
-import { assessmentDataSources } from './assessment-data-sources';
+import {
+    actionPlanColumns,
+    actionPlanFilename,
+    buildActionPlanSnapshot,
+    type ActionPlanActivity,
+    type ActionPlanSnapshot,
+} from './assessment-action-plan';
 import { explainNumber } from './assessment-explanations';
 import { loadAssessmentPdfFonts, pdfText, type PdfFonts } from './assessment-pdf';
 import type { AssessmentReportInput, OverviewChart } from './assessment-report';
-import { buildTargetAreas, type TargetAreaSet } from './assessment-targets';
+import type { TargetAreaSet } from './assessment-targets';
+import { drawPdfLogo, loadDostLogoDataUrl } from './dost-logo';
 
 /** Light-mode `.viz-palette` series, in the same fixed order the on-screen charts use. */
 const SERIES_HEX = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6'];
@@ -17,9 +23,21 @@ const PHASES: { phase: ActionPlanActivity['phase']; title: string; weeks: string
     { phase: 'Review', title: 'Review', weeks: 'Weeks 9-12', range: [9, 12], caption: 'results & next steps', color: SERIES_HEX[3] },
 ];
 
-export function createActionPlanPdf(report: AssessmentReportInput, fonts: PdfFonts, analysis?: AiResult, date = new Date()) {
-    const plan = buildAssessmentActionPlan(report, analysis, date);
-    const targetSet: TargetAreaSet | null = buildTargetAreas(report, 10);
+export function createActionPlanPdf(
+    report: AssessmentReportInput,
+    fonts: PdfFonts,
+    analysis?: AiResult,
+    date = new Date(),
+    logo: string | null = null,
+) {
+    return createActionPlanPdfFromSnapshot(buildActionPlanSnapshot(report, analysis, date), fonts, logo);
+}
+
+/** The PDF from a plan snapshot, so a saved plan exports exactly as it was generated. */
+export function createActionPlanPdfFromSnapshot(snapshot: ActionPlanSnapshot, fonts: PdfFonts, logo: string | null = null) {
+    const { plan } = snapshot;
+    const targetSet: TargetAreaSet | null = snapshot.targets;
+    const date = new Date(plan.generatedAt);
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true, putOnlyUsedFonts: true });
     doc.addFileToVFS('NotoSans-Regular.ttf', fonts.regular);
     doc.addFont('NotoSans-Regular.ttf', 'NotoSans', 'normal');
@@ -290,9 +308,11 @@ export function createActionPlanPdf(report: AssessmentReportInput, fonts: PdfFon
         return rowY + 5;
     }
     const stamp = new Intl.DateTimeFormat('en-PH', { timeZone: 'Asia/Singapore', dateStyle: 'medium', timeStyle: 'short' }).format(date);
+    const logoHeight = drawPdfLogo(doc, logo, margin, 10, 62);
+    if (logoHeight) y = 10 + logoHeight + 9;
     heading(`KonektaDOST · ${plan.location} Action Plan`, 18);
     paragraph(
-        `${plan.level} · ${report.location.province ?? 'Province not recorded'} · Generated ${stamp} (UTC+08:00) · Population year ${plan.populationYear ?? 'unavailable'}`,
+        `${plan.level} · ${snapshot.province ?? 'Province not recorded'} · Generated ${stamp} (UTC+08:00) · Population year ${plan.populationYear ?? 'unavailable'}`,
         8,
     );
     paragraph(
@@ -494,7 +514,7 @@ export function createActionPlanPdf(report: AssessmentReportInput, fonts: PdfFon
     plan.limitations.slice(1).forEach((text) => paragraph(text, 8));
     table(
         ['Data', 'Source / provider', 'Year / reference', 'Use'],
-        assessmentDataSources(report).map((row) => [row.data, row.source, row.reference, row.use]),
+        snapshot.sources.map((row) => [row.data, row.source, row.reference, row.use]),
     );
     paragraph(
         'Format reference: Region I BDRRM Action PLan.xlsx, Sheet1, supplied sample. The six matrix headings are adapted; its historical activities, dates, budgets and responsible offices are not reused.',
@@ -502,6 +522,8 @@ export function createActionPlanPdf(report: AssessmentReportInput, fonts: PdfFon
     );
     for (let number = 1; number <= doc.getNumberOfPages(); number++) {
         doc.setPage(number);
+        // Page 1 carries the full letterhead; later pages get a smaller logo in the top-right corner.
+        if (number > 1) drawPdfLogo(doc, logo, 283 - 30, 5, 30);
         doc.setFont('NotoSans', 'normal');
         doc.setFontSize(7);
         doc.setTextColor(100, 116, 139);
@@ -512,7 +534,11 @@ export function createActionPlanPdf(report: AssessmentReportInput, fonts: PdfFon
 }
 
 export async function downloadActionPlanPdf(report: AssessmentReportInput, analysis?: AiResult) {
-    const fonts = await loadAssessmentPdfFonts();
-    const date = new Date();
-    await createActionPlanPdf(report, fonts, analysis, date).save(actionPlanFilename(report, date), { returnPromise: true });
+    await downloadActionPlanSnapshotPdf(buildActionPlanSnapshot(report, analysis));
+}
+
+export async function downloadActionPlanSnapshotPdf(snapshot: ActionPlanSnapshot) {
+    const [fonts, logo] = await Promise.all([loadAssessmentPdfFonts(), loadDostLogoDataUrl()]);
+    const doc = createActionPlanPdfFromSnapshot(snapshot, fonts, logo);
+    await doc.save(actionPlanFilename(snapshot.plan.location, new Date(snapshot.plan.generatedAt)), { returnPromise: true });
 }

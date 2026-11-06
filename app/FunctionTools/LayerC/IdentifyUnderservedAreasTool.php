@@ -11,7 +11,6 @@ use App\Models\AgricultureCountEstimate;
 use App\Models\Barangay;
 use App\Models\Facility;
 use App\Models\Municipality;
-use App\Models\TelecomSite;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -166,7 +165,9 @@ class IdentifyUnderservedAreasTool implements FunctionToolInterface
                 ->get(['id', 'sector', 'latitude', 'longitude'])
             : collect();
 
+        // Select only what is read below: barangays.* would also load every polygon.
         $barangaysQuery = Barangay::query()
+            ->select(['id', 'psg_code', 'brgy_name', 'area_km2', 'center_lat', 'center_lng'])
             ->where('municipality_id', $location->id)
             ->with(['populationFigure', 'placeDescription'])
             ->orderBy('brgy_name');
@@ -349,4 +350,3 @@ class IdentifyUnderservedAreasTool implements FunctionToolInterface
         ];
     }
 }
-

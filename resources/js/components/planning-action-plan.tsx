@@ -1,3 +1,4 @@
+import { DostLogo } from '@/components/dost-logo';
 import PlanningVisuals from '@/components/planning-visuals';
 import { Button } from '@/components/ui/button';
 import { actionPlanColumns, parsePlanningPlan, planningPlanSources, type PlanningPlanSnapshot } from '@/lib/planning-plan';
@@ -61,6 +62,7 @@ export default function PlanningActionPlan({ snapshot, initiallyOpen = false }: 
                     onEscapeKeyDown={(event) => event.stopPropagation()}
                 >
                     <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-sky-100 px-5 py-4 sm:px-8 sm:py-5 dark:border-slate-700">
+                        <DostLogo className="h-9 border-slate-200 sm:h-10 sm:border-r sm:pr-4" />
                         <div className="min-w-0 flex-1">
                             <Dialog.Title className="text-lg leading-snug font-semibold break-words text-[#087dcc] sm:text-xl">
                                 {document.title}

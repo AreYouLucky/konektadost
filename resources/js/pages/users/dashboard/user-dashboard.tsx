@@ -54,14 +54,23 @@ interface ProgramRecord {
 }
 
 interface PlanRow {
+    /** `chat` plans open in GeoAgent; `assessment` plans were saved from the location assessment page. */
+    kind: 'chat' | 'assessment';
     id: number;
     title: string;
     version: number;
     status: string | null;
     created_at: string | null;
-    city: string;
+    city: string | null;
     municipality: string;
     province: string | null;
+}
+
+const PLAN_SOURCE = { chat: 'GeoAgent', assessment: 'Assessment' } as const;
+
+function openPlanRow(chat: ReturnType<typeof usePlanningChat>, plan: PlanRow) {
+    if (plan.kind === 'assessment') chat?.openAssessmentPlan(plan.id);
+    else if (plan.city) chat?.openPlan(plan.city, plan.id);
 }
 
 interface ConversationRow {
@@ -266,7 +275,7 @@ function WelcomeHeader({ name, firstName, planning }: { name: string; firstName:
                         {latestPlan && (
                             <button
                                 type="button"
-                                onClick={() => chat?.openPlan(latestPlan.city, latestPlan.id)}
+                                onClick={() => openPlanRow(chat, latestPlan)}
                                 className="group flex min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left hover:border-[#087dcc]/40 hover:bg-blue-50/60 focus-visible:outline-2 focus-visible:outline-[#087dcc] dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
                             >
                                 <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[#087dcc] dark:bg-sky-950">
@@ -277,7 +286,8 @@ function WelcomeHeader({ name, firstName, planning }: { name: string; firstName:
                                         {latestPlan.title}
                                     </span>
                                     <span className="block truncate text-[11px] text-slate-500 dark:text-slate-400">
-                                        Latest plan · {latestPlan.municipality} · v{latestPlan.version} · {formatDate(latestPlan.created_at)}
+                                        Latest plan · {PLAN_SOURCE[latestPlan.kind]} · {latestPlan.municipality} · v{latestPlan.version} ·{' '}
+                                        {formatDate(latestPlan.created_at)}
                                     </span>
                                 </span>
                                 <span className="shrink-0 text-xs font-semibold text-[#087dcc]">Open</span>
@@ -856,17 +866,17 @@ function MyPlanning({ planning }: { planning: DashboardProps['planning'] }) {
                 (recentPlans.length ? (
                     <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                         {plans.rows.map((plan) => (
-                            <li key={plan.id}>
+                            <li key={`${plan.kind}:${plan.id}`}>
                                 <button
                                     type="button"
-                                    onClick={() => chat?.openPlan(plan.city, plan.id)}
+                                    onClick={() => openPlanRow(chat, plan)}
                                     className="flex w-full items-center gap-3 rounded-lg px-1 py-2.5 text-left hover:bg-blue-50 dark:hover:bg-slate-800"
                                 >
                                     <FileText className="size-4 shrink-0 text-[#087dcc]" aria-hidden="true" />
                                     <span className="min-w-0 flex-1">
                                         <span className="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">{plan.title}</span>
                                         <span className="block truncate text-[11px] text-slate-500 dark:text-slate-400">
-                                            {plan.municipality} · v{plan.version} · {formatDate(plan.created_at)}
+                                            {PLAN_SOURCE[plan.kind]} · {plan.municipality} · v{plan.version} · {formatDate(plan.created_at)}
                                         </span>
                                     </span>
                                 </button>

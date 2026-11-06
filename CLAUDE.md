@@ -58,6 +58,7 @@ The platform is Windows. Use the PowerShell or Git Bash tool, and use `npm.cmd` 
 | `dost_techs` | 18 | **deployable technology catalog** (code e.g. `SETUP-FOOD-01`, name, agency, sector, deployment_clusters, mechanism, status, outcome); NCR-scoped reference, with one sector per row |
 | `technologies` | 11 | **STI program catalog** (STARBOOKS, DOSTv, …; category, target_audience, delivery_mode, active_status) |
 | `planning_conversations/messages/action_plans` | — | chat history and versioned plan snapshots (migrated) |
+| `assessment_action_plans` | — | versioned snapshots of the action plan generated on `/location/assess` (migration `2026_11_06_000400`); per user + level + location, de-duplicated by a content hash that ignores `generatedAt`; no FK to the imported geography tables |
 | `users` | 4 | `role`: `admin` / `user` / `technician` |
 
 The matching catalog is small: **29 entries** (18 `dost_techs` plus 11 `technologies`). Historical `dost_projects` are background evidence and must never be presented as available technologies.
@@ -124,10 +125,12 @@ The threshold is ≥40 (≥45 for projects). In `executeLayerE` only the **top**
 | `/location` | `location-map.tsx` | Leaflet service-area map (`?province=&city=` PSGC); hidden from the user sidebar, route still live |
 | `/location/assess?city=<psgc>&focus=` | `location-assessment.tsx` + `location-assessment/*` | deferred load from `/location/assess/data`; tabs for overview, sector needs, priority areas, DOST catalog, labs; PDF report and action-plan PDF export; AI interpretation via POST `/location/assess/ai` |
 | `/location/assess?level=&location=&map=` | same page | province, municipality or barangay scope through `MapAssessmentReport` |
+| Assessment action plan saving | `location-assessment/action-plan-export.tsx`, `saved-action-plan.tsx`, `lib/assessment-plan-store.ts` | opening the plan modal or downloading its PDF POSTs the `ActionPlanSnapshot` to `/location/assess/plans` (`AssessmentActionPlanController`, `Support/Assessment/AssessmentActionPlans`); the location is resolved server-side. Saved plans are listed with chat plans (`kind: chat|assessment`) in the sidebar and dashboard and open through `usePlanningChat().openAssessmentPlan(id)` |
 | GeoAgent ("Talk to GeoAgent" floating button and sidebar) | `components/planning-chat.tsx` | `PlanningChatProvider` is mounted in `AppShell`. `usePlanningChat()` exposes `show()` and `openPlan(city, planId)`. The window event `planning-plans-updated` refreshes the plan lists |
 | `/admin/*` (`role:admin`) | `admin/dashboard.tsx`, `admin/assessment.tsx`, `admin/search-map/*` | separate admin sidebar (`app-sidebar-admin.tsx`); data-import routes are commented out |
+| `/admin/data-entries/{resource}` (`role:admin`) | `admin/data-entries/index.tsx`, `resource.tsx` | CRUD for every sector + users, driven by `Support/DataEntries/DataEntryRegistry` (one definition per sector; `DataEntryController` + one generic page). Entries without a chosen location get municipality/barangay from their coordinates (`LocationFromCoordinates`, same polygon rule as `resources:relink-locations`) |
 
-The user layout is `layouts/app/app-sidebar-layout.tsx` with `components/app-sidebar.tsx`. The brand colour is `#087dcc`, with a white, slate and blue-50 palette.
+The user layout is `layouts/app/app-sidebar-layout.tsx` with `components/app-sidebar.tsx`. The brand colour is `#087dcc`, with a white, slate and blue-50 palette. The DOST logo is `resources/images/dost-logo-horizontal.png` (black text, for light backgrounds; `storage/app/` is git-ignored, so it is bundled through Vite instead): use `components/dost-logo.tsx` (`full` or cropped `mark`) in the UI and `lib/dost-logo.ts` (`loadDostLogoDataUrl`, `drawPdfLogo`) in PDFs.
 
 ## 6. AI layer (implemented)
 
@@ -141,8 +144,11 @@ The user layout is `layouts/app/app-sidebar-layout.tsx` with `components/app-sid
 - Normalize `"comleted"` → completed wherever project status is shown or filtered. Examples: `SearchDostTechnologiesTool::normalizeStatus`, `UserDashboardData::normalizeStatus`.
 - Missing ≠ zero: no tower recorded is not proof of no signal; no road data is not proof of isolation. Agriculture figures are modeled. Benchmarks are descriptive comparisons, not official standards.
 - Wrap expensive computation in `app(ReadCache::class)->remember(name, params, fn)`. Results containing `error` are not cached. Planning data uses the `planning` group.
-- Guard domain-table reads with `Schema::hasTable` and `hasColumn` where tests or fresh installs may lack the dump.
+- Guard domain-table reads with `Schema::hasTable` and `hasColumn` where tests or fresh installs may lack the dump. These lookups are memoized per request (`Support/Database/CachedSchemaBuilder`, bound to `db.schema` in `AppServiceProvider`; any DDL clears it), so they are cheap to repeat.
+- Resource location links (`facilities`, `laboratories`, `telecom_sites` → `municipality_id`/`barangay_id`) were rebuilt from coordinates on 2026-11-06 with `php artisan resources:relink-locations` (dry run by default; `--apply` writes a backup CSV to `storage/app/diagnostics/`; `--restore=<csv>` undoes it). Before that they used the legacy `old_municipalities`/`old_barangays` numbering (old 959 = Quezon City, current 959 = Maribojoc), so inventories and assessments counted almost nothing while the map showed every pin. Their foreign keys now point at the current tables (migrations `2026_11_06_000200`/`000300`). Re-run the command after re-importing any of these tables.
+- Lookup indexes for the imported tables live in migration `2026_11_06_000100` (`barangays.municipality_id`, `population_figures(psg_code, year)`, `facilities(barangay_id, sector)`, …). A cold municipality assessment takes ~4–6 s (Quezon City was ~44 s without them).
 - Every planning query must be scoped by `user_id` (and `municipality_id` for chat).
+- Send state-changing `fetch` calls through `fetchWithCsrf` (`lib/csrf.ts`). The `<meta name="csrf-token">` is rendered only on a full page load and goes stale after an Inertia login/logout, which used to surface as "Your session has expired"; the helper uses the `XSRF-TOKEN` cookie and retries a 419 once via `GET /csrf-token`.
 - Never put credentials in `VITE_` variables. Responses carrying user data use `Cache-Control: private, no-store`.
 - Debris to ignore or clean: `resources/js/pages/hatdog.tsx` (joke page), `resources/js/pages/dashboard.tsx` (old placeholder, no longer routed), and the misspelled folder `pages/users/intellegence-map/`.
 

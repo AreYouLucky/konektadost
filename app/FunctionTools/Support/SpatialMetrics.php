@@ -170,7 +170,9 @@ class SpatialMetrics
             ];
         }
 
+        // Select only what is read below: barangays.* would also load every polygon.
         $barangays = Barangay::query()
+            ->select(['id', 'psg_code', 'brgy_name'])
             ->where('municipality_id', $municipality->id)
             ->with('populationFigure')
             ->withCount(['facilities as sector_count' => fn ($q) => $q->where('sector', $sector)])
@@ -226,4 +228,3 @@ class SpatialMetrics
         ];
     }
 }
-

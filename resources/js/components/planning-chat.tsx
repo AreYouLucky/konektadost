@@ -1,6 +1,7 @@
 import PlanningActionPlan from '@/components/planning-action-plan';
 import PlanningVisuals, { type PlanningVisual } from '@/components/planning-visuals';
 import { SidebarMenuButton, useSidebar } from '@/components/ui/sidebar';
+import { fetchWithCsrf, isSessionEnded } from '@/lib/csrf';
 import { isPlanningActionPlan, stripToolCitations } from '@/lib/planning-plan';
 import type { SharedData } from '@/types';
 import { usePage } from '@inertiajs/react';
@@ -23,7 +24,10 @@ import {
     Square,
     X,
 } from 'lucide-react';
-import { createContext, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { createContext, lazy, Suspense, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+
+/** Saved assessment-page plans open in their own viewer, loaded only when one is opened. */
+const SavedActionPlanDialog = lazy(() => import('@/pages/location-assessment/saved-action-plan'));
 
 interface Municipality {
     id: number;
@@ -101,7 +105,14 @@ interface Scope {
     municipality_id?: number;
 }
 
-const ChatContext = createContext<{ open: boolean; show: () => void; openPlan: (city: string, planId: number) => void } | null>(null);
+const ChatContext = createContext<{
+    open: boolean;
+    show: () => void;
+    /** Opens a GeoAgent (chat) plan in the assistant window. */
+    openPlan: (city: string, planId: number) => void;
+    /** Opens a plan saved from the location assessment page. */
+    openAssessmentPlan: (planId: number) => void;
+} | null>(null);
 
 export function usePlanningChat() {
     return useContext(ChatContext);
@@ -111,6 +122,7 @@ export function PlanningChatProvider({ children }: { children: ReactNode }) {
     const [open, setOpen] = useState(false);
     const [minimized, setMinimized] = useState(false);
     const [requestedPlan, setRequestedPlan] = useState<{ city: string; id: number; visit: number } | null>(null);
+    const [assessmentPlanId, setAssessmentPlanId] = useState<number | null>(null);
     const { url, props } = usePage<SharedData>();
     const params = new URLSearchParams(url.split('?')[1] ?? '');
     const city = params.get('city') ?? (typeof props.selectedCity === 'string' ? props.selectedCity : null);
@@ -124,6 +136,7 @@ export function PlanningChatProvider({ children }: { children: ReactNode }) {
     const effectiveScope = requestedPlan ? { city: requestedPlan.city } : scope;
     const scopeKey = requestedPlan ? `plan:${requestedPlan.id}:${requestedPlan.visit}` : (scope?.city ?? String(scope?.municipality_id ?? 'choose'));
     useEffect(() => setRequestedPlan(null), [url, props.auth.user.id]);
+    useEffect(() => setAssessmentPlanId(null), [props.auth.user.id]);
     const show = () => {
         setOpen(true);
         setMinimized(false);
@@ -138,9 +151,15 @@ export function PlanningChatProvider({ children }: { children: ReactNode }) {
                     setRequestedPlan({ city, id, visit: Date.now() });
                     show();
                 },
+                openAssessmentPlan: (id) => setAssessmentPlanId(id),
             }}
         >
             {children}
+            {assessmentPlanId !== null && (
+                <Suspense fallback={null}>
+                    <SavedActionPlanDialog key={assessmentPlanId} planId={assessmentPlanId} onClose={() => setAssessmentPlanId(null)} />
+                </Suspense>
+            )}
             <PlanningChatWindow
                 key={`${props.auth.user.id}:${scopeKey}`}
                 initialScope={effectiveScope}
@@ -210,22 +229,23 @@ function requestUuid() {
 }
 
 async function requestJson(url: string, options: RequestInit = {}) {
-    const response = await fetch(url, {
+    // The page's meta token goes stale after an Inertia login/logout; this sends the current token
+    // and retries a 419 once, so only a truly ended session reaches the message below.
+    const response = await fetchWithCsrf(url, {
         ...options,
-        credentials: 'same-origin',
         headers: {
             Accept: 'application/json',
             'Content-Type': 'application/json',
             'X-Requested-With': 'XMLHttpRequest',
-            'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '',
-            ...options.headers,
+            ...(options.headers as Record<string, string> | undefined),
         },
     });
-    if (response.redirected || [401, 419].includes(response.status)) throw new Error('Your session has expired. Refresh and sign in again.');
+    if (isSessionEnded(response)) throw new Error('Your session has expired. Refresh and sign in again.');
     if (response.status === 429) throw new Error('Too many requests. Please wait a minute and try again.');
     if (response.status === 404) throw new Error('This municipality could not be found. Choose a location below.');
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload.message || 'The assistant is unavailable. Please retry.');
+    // A server error page (e.g. a PHP time limit during a long reply) is HTML, not JSON.
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload) throw new Error(payload?.message || 'The assistant is unavailable. Please retry.');
     return payload;
 }
 

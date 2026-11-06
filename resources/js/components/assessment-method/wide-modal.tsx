@@ -11,27 +11,39 @@ export default function WideModal({
     trigger,
     title,
     description,
+    leading,
     actions,
     footer,
     size = 'lg',
+    open,
+    onOpenChange,
     children,
 }: {
-    trigger: ReactNode;
+    /** Omit when the modal is opened programmatically through `open`. */
+    trigger?: ReactNode;
     title: ReactNode;
     description?: ReactNode;
+    /** Shown before the title, e.g. a logo. */
+    leading?: ReactNode;
     actions?: ReactNode;
     footer?: ReactNode;
     size?: keyof typeof SIZES;
+    /** Optional controlled state; uncontrolled when omitted. */
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
     children: ReactNode;
 }) {
     return (
-        <Dialog>
-            <DialogTrigger asChild>{trigger}</DialogTrigger>
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
             <DialogContent
                 style={{ translate: '-50% -50%' }}
                 className={`flex max-h-[90dvh] w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden rounded-2xl p-0 ${SIZES[size]}`}
             >
                 <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-200 py-4 pr-12 pl-5 sm:pl-6 dark:border-slate-800">
+                    {leading && (
+                        <div className="flex shrink-0 items-center border-slate-200 sm:border-r sm:pr-4 dark:border-slate-700">{leading}</div>
+                    )}
                     <div className="min-w-0 flex-1">
                         <DialogTitle className="text-base leading-snug font-semibold text-[#087dcc] sm:text-lg">{title}</DialogTitle>
                         {description && <DialogDescription className="mt-1 text-xs sm:text-sm">{description}</DialogDescription>}

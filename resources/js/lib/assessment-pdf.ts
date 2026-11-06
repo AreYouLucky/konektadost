@@ -23,6 +23,7 @@ import {
     type LayerOverview,
     type OverviewChart,
 } from './assessment-report';
+import { drawPdfLogo, loadDostLogoDataUrl } from './dost-logo';
 
 export interface PdfFonts {
     regular: string;
@@ -71,6 +72,7 @@ export function createAssessmentPdf(
     overviews = buildLayerOverviews(report),
     analysis?: AiResult,
     date = new Date(),
+    logo: string | null = null,
 ) {
     const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true, putOnlyUsedFonts: true });
     doc.addFileToVFS('NotoSans-Regular.ttf', fonts.regular);
@@ -182,6 +184,8 @@ export function createAssessmentPdf(
     };
     const bundle = reportRecord(report.functionToolsBundle);
     const stamp = new Intl.DateTimeFormat('en-PH', { timeZone: 'Asia/Singapore', dateStyle: 'medium', timeStyle: 'short' }).format(date);
+    const logoHeight = drawPdfLogo(doc, logo, margin, 10, 58);
+    if (logoHeight) y = 10 + logoHeight + 9;
     heading('KonektaDOST · Technology & laboratory fit', 18);
     heading(report.location.name, 15);
     paragraph(
@@ -444,6 +448,8 @@ export function createAssessmentPdf(
     const pages = doc.getNumberOfPages();
     for (let page = 1; page <= pages; page++) {
         doc.setPage(page);
+        // Page 1 carries the full letterhead; later pages get a smaller logo in the top-right corner.
+        if (page > 1) drawPdfLogo(doc, logo, 194 - 30, 5, 30);
         doc.setFont('NotoSans', 'normal');
         doc.setFontSize(7);
         doc.setTextColor(100, 116, 139);
@@ -467,7 +473,7 @@ function summarizeValues(value: unknown, depth = 0): string {
 }
 
 export async function downloadAssessmentPdf(report: AssessmentReportInput, overviews: Record<AssessmentLayer, LayerOverview>, analysis?: AiResult) {
-    const fonts = await loadAssessmentPdfFonts();
-    const doc = createAssessmentPdf(report, fonts, overviews, analysis);
+    const [fonts, logo] = await Promise.all([loadAssessmentPdfFonts(), loadDostLogoDataUrl()]);
+    const doc = createAssessmentPdf(report, fonts, overviews, analysis, new Date(), logo);
     await doc.save(assessmentPdfFilename(report), { returnPromise: true });
 }

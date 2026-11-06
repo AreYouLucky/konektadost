@@ -2,14 +2,24 @@ import type { AiResult } from '@/components/assessment-ai-analysis';
 import { ChartCard, FlowSteps, StackedBars } from '@/components/assessment-method/charts';
 import { NeedsChartExplain, OptionsChartExplain, TimelineExplain } from '@/components/assessment-method/explain';
 import WideModal from '@/components/assessment-method/wide-modal';
+import { DostLogo } from '@/components/dost-logo';
 import { Button } from '@/components/ui/button';
 import { DialogClose } from '@/components/ui/dialog';
-import { actionPlanColumns, buildAssessmentActionPlan, type ActionPlanActivity } from '@/lib/assessment-action-plan';
+import {
+    actionPlanColumns,
+    buildActionPlanSnapshot,
+    type ActionPlanActivity,
+    type ActionPlanSnapshot,
+    type AssessmentActionPlan,
+} from '@/lib/assessment-action-plan';
 import { explainNumber } from '@/lib/assessment-explanations';
+import { assessmentPlanScope, saveAssessmentPlan, type SavedAssessmentPlanSummary } from '@/lib/assessment-plan-store';
 import type { AssessmentReportInput, OverviewChart } from '@/lib/assessment-report';
-import { buildTargetAreas } from '@/lib/assessment-targets';
-import { FileDown, LoaderCircle } from 'lucide-react';
-import { useMemo, useState, type ReactNode } from 'react';
+import type { TargetAreaSet } from '@/lib/assessment-targets';
+import type { SharedData } from '@/types';
+import { usePage } from '@inertiajs/react';
+import { AlertTriangle, CheckCircle2, FileDown, LoaderCircle, RotateCcw } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { TargetRankingExplanation } from './target-areas';
 
 const PHASE_COLORS: Record<ActionPlanActivity['phase'], string> = {
@@ -19,15 +29,25 @@ const PHASE_COLORS: Record<ActionPlanActivity['phase'], string> = {
     Review: 'var(--series-4)',
 };
 
-export function useActionPlanDownload(report: AssessmentReportInput, analysis?: AiResult) {
+/** The live assessment plus how the page was opened, which the save request needs to locate it. */
+export type ActionPlanReport = AssessmentReportInput & { assessmentParams?: Record<string, string | number> };
+
+/** Downloads the PDF of a live report or a saved snapshot; `onGenerated` receives the snapshot that was exported. */
+export function useActionPlanDownload(
+    source: ActionPlanReport | ActionPlanSnapshot,
+    analysis?: AiResult,
+    onGenerated?: (snapshot: ActionPlanSnapshot) => void,
+) {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     async function download() {
         setBusy(true);
         setError(null);
         try {
-            const { downloadActionPlanPdf } = await import('@/lib/assessment-action-plan-pdf');
-            await downloadActionPlanPdf(report, analysis);
+            const snapshot = 'schema' in source ? source : buildActionPlanSnapshot(source, analysis);
+            const { downloadActionPlanSnapshotPdf } = await import('@/lib/assessment-action-plan-pdf');
+            await downloadActionPlanSnapshotPdf(snapshot);
+            onGenerated?.(snapshot);
         } catch {
             setError('The action plan PDF could not be created. Please retry.');
         } finally {
@@ -35,6 +55,78 @@ export function useActionPlanDownload(report: AssessmentReportInput, analysis?: 
         }
     }
     return { busy, error, download };
+}
+
+export type ActionPlanSaveState =
+    | { status: 'idle' }
+    | { status: 'saving' }
+    /** The page has no location the server can resolve, so nothing is saved. */
+    | { status: 'unsupported' }
+    | { status: 'saved'; plan: SavedAssessmentPlanSummary; created: boolean }
+    | { status: 'error'; message: string };
+
+/**
+ * Saves generated plans to the account (sidebar "Generated action plans" and the dashboard).
+ * The same plan is saved once; a changed plan (e.g. after the AI interpretation arrives) becomes a new version.
+ */
+export function useActionPlanSave(report: ActionPlanReport) {
+    const { props } = usePage<SharedData>();
+    const userId = props.auth.user.id;
+    const scope = useMemo(() => assessmentPlanScope(report), [report]);
+    const [state, setState] = useState<ActionPlanSaveState>({ status: 'idle' });
+    const latest = useRef<ActionPlanSnapshot | null>(null);
+    const save = useCallback(
+        async (snapshot: ActionPlanSnapshot) => {
+            latest.current = snapshot;
+            if (!scope) {
+                setState({ status: 'unsupported' });
+                return;
+            }
+            setState({ status: 'saving' });
+            try {
+                const result = await saveAssessmentPlan(userId, scope, snapshot);
+                // Ignore a slower response for a plan that has since changed.
+                if (latest.current === snapshot) setState({ status: 'saved', plan: result.plan, created: result.created });
+            } catch (error) {
+                if (latest.current === snapshot)
+                    setState({ status: 'error', message: error instanceof Error ? error.message : 'The action plan could not be saved.' });
+            }
+        },
+        [scope, userId],
+    );
+    const retry = useCallback(() => {
+        if (latest.current) void save(latest.current);
+    }, [save]);
+    return { state, save, retry };
+}
+
+export type ActionPlanSaver = ReturnType<typeof useActionPlanSave>;
+
+/** One-line save status for the modal footer and the page header. */
+export function ActionPlanSaveStatus({ saver, className = '' }: { saver: ActionPlanSaver; className?: string }) {
+    const { state } = saver;
+    if (state.status === 'idle' || state.status === 'unsupported') return null;
+    if (state.status === 'saving')
+        return (
+            <p role="status" className={`flex items-center gap-1.5 text-xs text-slate-500 ${className}`}>
+                <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> Saving to your plans…
+            </p>
+        );
+    if (state.status === 'error')
+        return (
+            <p role="alert" className={`flex flex-wrap items-center gap-1.5 text-xs text-amber-800 dark:text-amber-300 ${className}`}>
+                <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" /> Not saved: {state.message}
+                <button type="button" onClick={saver.retry} className="inline-flex items-center gap-1 font-medium text-[#087dcc] hover:underline">
+                    <RotateCcw className="size-3" aria-hidden="true" /> Retry
+                </button>
+            </p>
+        );
+    return (
+        <p role="status" className={`flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-300 ${className}`}>
+            <CheckCircle2 className="size-3.5 shrink-0" aria-hidden="true" />
+            Saved as version {state.plan.version} in Generated action plans
+        </p>
+    );
 }
 
 function DownloadButton({ busy, onClick, className = '' }: { busy: boolean; onClick: () => void; className?: string }) {
@@ -130,9 +222,8 @@ function Section({ n, title, children }: { n: number; title: string; children: R
     );
 }
 
-function ActionPlanView({ report, analysis }: { report: AssessmentReportInput; analysis?: AiResult }) {
-    const plan = useMemo(() => buildAssessmentActionPlan(report, analysis), [report, analysis]);
-    const targets = useMemo(() => buildTargetAreas(report, 10), [report]);
+/** The plan body (graphs, timeline, matrix), rendered from a live or saved snapshot. */
+export function ActionPlanView({ plan, targets }: { plan: AssessmentActionPlan; targets: TargetAreaSet | null }) {
     const levelLabel = plan.targetLevel === 'municipality' ? 'cities / municipalities' : 'barangays';
     return (
         <div className="viz-palette min-w-0 space-y-6">
@@ -271,22 +362,46 @@ function ActionPlanView({ report, analysis }: { report: AssessmentReportInput; a
     );
 }
 
-/** The action plan modal (graphs, timeline, matrix) with Download PDF in its header and footer. */
-export function ActionPlanModal({ report, analysis, trigger }: { report: AssessmentReportInput; analysis?: AiResult; trigger: ReactNode }) {
-    const { busy, error, download } = useActionPlanDownload(report, analysis);
+/**
+ * The action plan modal (graphs, timeline, matrix) with Download PDF in its footer.
+ * Opening it generates the plan, which is saved to the account through `saver`.
+ */
+export function ActionPlanModal({
+    report,
+    analysis,
+    trigger,
+    saver,
+}: {
+    report: ActionPlanReport;
+    analysis?: AiResult;
+    trigger: ReactNode;
+    saver: ActionPlanSaver;
+}) {
+    const [open, setOpen] = useState(false);
+    const snapshot = useMemo(() => buildActionPlanSnapshot(report, analysis), [report, analysis]);
+    const { busy, error, download } = useActionPlanDownload(snapshot);
+    const { save } = saver;
+    useEffect(() => {
+        if (open) void save(snapshot);
+    }, [open, snapshot, save]);
     return (
         <WideModal
             size="xl"
+            open={open}
+            onOpenChange={setOpen}
             title={`${report.location.name} · DOST Action Plan`}
             description="Draft for LGU/DOST validation. Scores are computed; schedule and costs are proposed."
-            actions={<DownloadButton busy={busy} onClick={download} />}
+            leading={<DostLogo className="h-9 sm:h-10" />}
             footer={
                 <>
-                    {error && (
-                        <p role="alert" className="mr-auto text-xs text-amber-800 dark:text-amber-300">
-                            {error}
-                        </p>
-                    )}
+                    <div className="mr-auto flex min-w-0 flex-col gap-1">
+                        <ActionPlanSaveStatus saver={saver} />
+                        {error && (
+                            <p role="alert" className="text-xs text-amber-800 dark:text-amber-300">
+                                {error}
+                            </p>
+                        )}
+                    </div>
                     <DialogClose asChild>
                         <Button variant="ghost">Close</Button>
                     </DialogClose>
@@ -295,7 +410,7 @@ export function ActionPlanModal({ report, analysis, trigger }: { report: Assessm
             }
             trigger={trigger}
         >
-            <ActionPlanView report={report} analysis={analysis} />
+            <ActionPlanView plan={snapshot.plan} targets={snapshot.targets} />
         </WideModal>
     );
 }

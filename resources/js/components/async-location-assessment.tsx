@@ -1,3 +1,4 @@
+import AssessmentProgress from '@/components/assessment-progress';
 import { Button } from '@/components/ui/button';
 import AppSidebarLayout from '@/layouts/app/app-sidebar-layout';
 import AppSidebarLayoutAdmin from '@/layouts/app/app-sidebar-layout-admin';
@@ -108,18 +109,19 @@ export default function AsyncLocationAssessment({
                         </>
                     ) : (
                         <>
-                            <div className="relative mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-blue-50">
+                            <div className="relative mx-auto mb-5 flex size-16 items-center justify-center rounded-full bg-blue-50">
                                 <LoaderCircle
-                                    className="absolute inset-0 size-20 animate-spin text-[#087dcc]/70 motion-reduce:animate-none"
+                                    className="absolute inset-0 size-16 animate-spin text-[#087dcc]/70 motion-reduce:animate-none"
                                     strokeWidth={1}
                                     aria-hidden="true"
                                 />
-                                <ClipboardList className="size-8 text-[#087dcc]" strokeWidth={1.5} aria-hidden="true" />
+                                <ClipboardList className="size-7 text-[#087dcc]" strokeWidth={1.5} aria-hidden="true" />
                             </div>
-                            <h2 className="text-2xl font-semibold tracking-tight text-slate-900">Generating assessment…</h2>
-                            <p role="status" className="mt-3 text-sm leading-relaxed text-slate-500">
-                                Preparing local indicators, barangay priorities, and STI options. Your report will appear here when it’s ready.
+                            <h2 className="text-2xl font-semibold tracking-tight text-slate-900">Analyzing {pending.name}</h2>
+                            <p role="status" className="sr-only">
+                                Generating the assessment. The report will appear here when it’s ready.
                             </p>
+                            <AssessmentProgress name={pending.name} className="mx-auto mt-6 max-w-sm" />
                             <Button variant="ghost" onClick={cancel} className="mt-6 text-slate-500 hover:bg-blue-50 hover:text-[#087dcc]">
                                 Cancel request
                             </Button>

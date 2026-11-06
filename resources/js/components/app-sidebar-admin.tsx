@@ -1,3 +1,4 @@
+import { DostLogo } from '@/components/dost-logo';
 import { NavUser } from '@/components/nav-user';
 import { PlanningChatLauncher } from '@/components/planning-chat';
 import { PlanningSavedPlans } from '@/components/planning-saved-plans';
@@ -15,25 +16,18 @@ import {
     SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { Link, usePage } from '@inertiajs/react';
-import {
-    ArrowUpRight,
-    ChevronRight,
-    ClipboardList,
-    FileUp,
-    Globe2,
-    LayoutGrid,
-    LockKeyhole,
-    MapPin,
-    MapPinned,
-    ShieldCheck,
-    Users,
-} from 'lucide-react';
+import { ArrowUpRight, ChevronRight, Database, Globe2, LayoutGrid, ShieldCheck, Users } from 'lucide-react';
 
 const workspaceItems = [
     { title: 'Overview', href: '/admin/dashboard', icon: LayoutGrid },
     { title: 'Intelligence Map', href: '/admin/search-map', icon: Globe2 },
-    { title: 'Location Assessment', href: '/admin/assessment', icon: ClipboardList },
-    { title: 'Service Area Map', href: '/location', icon: MapPinned },
+    // Location Assessment (/admin/assessment) and Service Area Map (/location) are hidden, as in the user workspace.
+    // Assessments open from the Intelligence Map; both routes stay for existing links.
+];
+
+const dataItems = [
+    { title: 'Data entries', href: '/admin/data-entries', icon: Database },
+    { title: 'Users', href: '/admin/data-entries/users', icon: Users },
 ];
 
 /** Admin navigation is kept separate from the user sidebar. */
@@ -53,8 +47,8 @@ export function AppSidebarAdmin() {
                             className="h-12 min-w-0 flex-1 rounded-xl p-0 group-data-[collapsible=icon]:flex-none hover:bg-blue-50"
                         >
                             <Link href="/admin/dashboard" prefetch>
-                                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-blue-100 bg-blue-50 text-[#087dcc] group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:rounded-lg">
-                                    <MapPin className="size-5" strokeWidth={1.8} aria-hidden="true" />
+                                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-blue-100 bg-white group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:rounded-lg">
+                                    <DostLogo variant="mark" className="h-6 group-data-[collapsible=icon]:h-5" />
                                 </div>
                                 <span className="ml-1 flex min-w-0 flex-col gap-1 group-data-[collapsible=icon]:hidden">
                                     <span className="truncate text-base font-semibold tracking-tight text-slate-900">KonektaDOST</span>
@@ -82,7 +76,8 @@ export function AppSidebarAdmin() {
                     </SidebarGroupLabel>
                     <SidebarMenu className="gap-1.5">
                         {workspaceItems.map((item) => {
-                            const active = currentPath === item.href || (item.href === '/admin/assessment' && currentPath === '/location/assess');
+                            // An assessment is opened from the map, so the map stays highlighted while it is shown.
+                            const active = currentPath === item.href || (item.href === '/admin/search-map' && currentPath === '/location/assess');
                             return (
                                 <SidebarMenuItem key={item.href}>
                                     <SidebarMenuButton
@@ -116,28 +111,34 @@ export function AppSidebarAdmin() {
                         Reference data
                     </SidebarGroupLabel>
                     <SidebarMenu className="gap-1.5">
-                        {[
-                            { title: 'Population', icon: Users },
-                            { title: 'Data import', icon: FileUp },
-                        ].map((item) => (
-                            <SidebarMenuItem key={item.title}>
-                                <SidebarMenuButton
-                                    disabled
-                                    tooltip={`${item.title} · Not enabled`}
-                                    title={`${item.title} management is not enabled`}
-                                    className="h-10 rounded-xl px-3 text-[13px] text-slate-400 disabled:opacity-50 [&>svg]:size-[18px]"
-                                >
-                                    <item.icon strokeWidth={1.7} aria-hidden="true" />
-                                    <span>{item.title}</span>
-                                    <LockKeyhole className="ml-auto size-3! opacity-70 group-data-[collapsible=icon]:hidden" aria-hidden="true" />
-                                    <span className="sr-only">Not enabled</span>
-                                </SidebarMenuButton>
-                            </SidebarMenuItem>
-                        ))}
+                        {dataItems.map((item) => {
+                            const active =
+                                item.href === '/admin/data-entries/users'
+                                    ? currentPath === item.href
+                                    : currentPath.startsWith('/admin/data-entries') && currentPath !== '/admin/data-entries/users';
+                            return (
+                                <SidebarMenuItem key={item.href}>
+                                    <SidebarMenuButton
+                                        asChild
+                                        isActive={active}
+                                        tooltip={item.title}
+                                        className="h-11 rounded-xl px-3 text-[13px] font-medium text-slate-600 transition-colors hover:bg-blue-50 hover:text-[#087dcc] data-[active=true]:bg-[#087dcc]/10 data-[active=true]:font-semibold data-[active=true]:text-[#087dcc] [&>svg]:size-[18px]"
+                                    >
+                                        <Link href={item.href} aria-current={active ? 'page' : undefined}>
+                                            <item.icon strokeWidth={1.7} aria-hidden="true" />
+                                            <span>{item.title}</span>
+                                            {active && (
+                                                <ChevronRight
+                                                    className="ml-auto size-3.5! opacity-60 group-data-[collapsible=icon]:hidden"
+                                                    aria-hidden="true"
+                                                />
+                                            )}
+                                        </Link>
+                                    </SidebarMenuButton>
+                                </SidebarMenuItem>
+                            );
+                        })}
                     </SidebarMenu>
-                    <p className="mt-2 px-3 text-[10px] leading-relaxed text-slate-500 group-data-[collapsible=icon]:hidden">
-                        Data management is not enabled.
-                    </p>
                 </SidebarGroup>
 
                 <PlanningSavedPlans />

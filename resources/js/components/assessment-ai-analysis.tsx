@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import { csrfHeaders } from '@/lib/csrf';
+import { fetchWithCsrf, isSessionEnded } from '@/lib/csrf';
 import { LoaderCircle, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -50,20 +50,18 @@ export function useAssessmentAi(city: string | null, focus: string, active: bool
         setState({ key, status: 'loading' });
         const timer = window.setTimeout(() => controller.abort(), 90000);
         try {
-            const response = await fetch(route('location.assess.ai'), {
+            // Retries a stale-token 419 once, so only an ended session reports as expired.
+            const response = await fetchWithCsrf(route('location.assess.ai'), {
                 method: 'POST',
-                credentials: 'same-origin',
                 signal: controller.signal,
                 headers: {
                     Accept: 'application/json',
                     'Content-Type': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest',
-                    ...csrfHeaders(),
                 },
                 body: JSON.stringify(level && location ? { level, location, map, focus } : { city, focus }),
             });
-            if (response.redirected || [401, 419].includes(response.status))
-                throw new Error('Your session has expired. Refresh the page and sign in again.');
+            if (isSessionEnded(response)) throw new Error('Your session has expired. Refresh the page and sign in again.');
             if (response.status === 429) throw new Error('Please wait a moment before requesting another AI analysis.');
             const payload = await response.json().catch(() => null);
             if (!payload) throw new Error('The AI request did not finish successfully. Please retry.');

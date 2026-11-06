@@ -84,3 +84,34 @@ test('PDF retains the sample matrix columns, landscape format, fonts and Singapo
     assert.equal(doc.getFont().fontName, 'NotoSans');
     assert.match(actionPlanFilename(fixture(), new Date('2026-11-03T17:30:00Z')), /2026-11-04\.pdf$/);
 });
+
+test('a saved snapshot survives JSON storage and exports the same PDF content', () => {
+    const { buildActionPlanSnapshot } = load(path.join(root, 'resources/js/lib/assessment-action-plan.ts'));
+    const { createActionPlanPdfFromSnapshot } = load(path.join(root, 'resources/js/lib/assessment-action-plan-pdf.ts'));
+    const snapshot = buildActionPlanSnapshot(fixture(), ai(), new Date('2026-11-03T17:30:00Z'));
+    assert.equal(snapshot.schema, 1);
+    assert.equal(snapshot.province, 'Sample province');
+    assert.ok(snapshot.sources.length > 0);
+    assert.equal(snapshot.plan.generatedAt, '2026-11-03T17:30:00.000Z');
+    const stored = JSON.parse(JSON.stringify(snapshot));
+    const fonts = { regular: fs.readFileSync(path.join(root, 'resources/fonts/noto-sans/NotoSans-Regular.ttf')).toString('base64'), bold: fs.readFileSync(path.join(root, 'resources/fonts/noto-sans/NotoSans-Bold.ttf')).toString('base64') };
+    const doc = createActionPlanPdfFromSnapshot(stored, fonts, null);
+    assert.equal(Buffer.from(doc.output('arraybuffer')).subarray(0, 5).toString(), '%PDF-');
+    assert.ok(doc.getNumberOfPages() >= 4);
+    assert.match(actionPlanFilename(stored.plan.location, new Date(stored.plan.generatedAt)), /Sample-area-2026-11-04\.pdf$/);
+});
+
+test('plan identity ignores the generation time but not the content, user or location', () => {
+    const { buildActionPlanSnapshot } = load(path.join(root, 'resources/js/lib/assessment-action-plan.ts'));
+    const { planFingerprint, assessmentPlanScope } = load(path.join(root, 'resources/js/lib/assessment-plan-store.ts'));
+    const scope = assessmentPlanScope(fixture());
+    assert.deepEqual(scope, { city: '0701232001', focus: 'general' });
+    assert.deepEqual(assessmentPlanScope({ ...fixture(), assessmentParams: { level: 'province', location: '7', map: 'user' } }), { level: 'province', location: 7, map: 'user', focus: 'general' });
+    assert.equal(assessmentPlanScope({ ...fixture(), location: { ...fixture().location, psg_code: null } }), null);
+    const early = buildActionPlanSnapshot(fixture(), undefined, new Date('2026-11-03T01:00:00Z'));
+    const late = buildActionPlanSnapshot(fixture(), undefined, new Date('2026-11-05T01:00:00Z'));
+    assert.equal(planFingerprint(1, scope, early), planFingerprint(1, scope, late));
+    assert.notEqual(planFingerprint(1, scope, early), planFingerprint(2, scope, early));
+    assert.notEqual(planFingerprint(1, scope, early), planFingerprint(1, { city: '0701232002' }, early));
+    assert.notEqual(planFingerprint(1, scope, early), planFingerprint(1, scope, buildActionPlanSnapshot(fixture(), ai(), new Date('2026-11-03T01:00:00Z'))));
+});

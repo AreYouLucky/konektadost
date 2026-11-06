@@ -20,7 +20,7 @@ import {
     type LucideIcon,
 } from 'lucide-react';
 import { useId, useMemo, useState, type ReactNode } from 'react';
-import { ActionPlanModal, useActionPlanDownload } from './action-plan-export';
+import { ActionPlanModal, ActionPlanSaveStatus, useActionPlanDownload, useActionPlanSave } from './action-plan-export';
 import SourceBasisModal from './source-basis-modal';
 import type { AssessmentPageProps } from './types';
 
@@ -34,7 +34,9 @@ export function ReportActions({
     overviews: Record<AssessmentLayer, LayerOverview>;
     analysis?: AiResult;
 }) {
-    const plan = useActionPlanDownload(report, analysis);
+    // Opening the plan or downloading its PDF saves it to the account's generated action plans.
+    const saver = useActionPlanSave(report);
+    const plan = useActionPlanDownload(report, analysis, saver.save);
     const full = useAssessmentPdfDownload(report, overviews, analysis);
     const busy = plan.busy || full.busy;
     const error = plan.error ?? full.error;
@@ -44,6 +46,7 @@ export function ReportActions({
                 <ActionPlanModal
                     report={report}
                     analysis={analysis}
+                    saver={saver}
                     trigger={
                         <Button className="flex-1 bg-[#087dcc] text-white hover:bg-[#086bb0] sm:flex-none">
                             <ClipboardList className="size-4" aria-hidden="true" /> View action plan
@@ -86,6 +89,7 @@ export function ReportActions({
                     {error}
                 </p>
             )}
+            <ActionPlanSaveStatus saver={saver} className="sm:justify-end" />
         </div>
     );
 }
@@ -241,13 +245,13 @@ export function ChartGrid({ children }: { children: ReactNode }) {
     return <div className="grid min-w-0 gap-4 lg:grid-cols-2">{children}</div>;
 }
 
-/** A titled block that can be folded away, with an optional count. */
+/** A titled block that can be folded away, with an optional count. Closed by default so each step leads with its graphs. */
 export function Collapsible({
     title,
     count,
     hint,
     icon: Icon = Target,
-    defaultOpen = true,
+    defaultOpen = false,
     children,
 }: {
     title: string;
