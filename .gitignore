@@ -24,6 +24,8 @@ Homestead.yaml
 npm-debug.log
 yarn-error.log
 
-# Database dumps for the Docker database container
-/docker/mysql-init/*.sql
-/docker/mysql-init/*.sql.gz
+# Database dumps: large and private, never committed (wherever a dump command writes them).
+# The schema files in database/schema/ are the exception.
+*.sql
+*.sql.gz
+!database/schema/*.sql
