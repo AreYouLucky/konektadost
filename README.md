@@ -1,557 +1,403 @@
 # KonektaDOST
 
-For a standalone website description to share with ChatGPT, see [Website Description](WEBSITE_README.md).
+**Geospatial decision support for the Department of Science and Technology (DOST), Philippines.**
 
-For the MapLibre geographic explorer at `/admin/search-map`, see [Map Explorer](docs/MAP_EXPLORER.md), including terrain, optional licensed imagery, and geographic API setup.
+KonektaDOST answers one question: _for a selected province, city/municipality or barangay, which DOST technologies and STI programs should be deployed there, why, and how?_ It measures local conditions, compares them with national reference rates, finds development gaps, ranks target areas, matches the gaps against the DOST catalog and drafts an action plan with five executive outputs:
 
-For the current function tools, assessment formulas, and worked examples such as cell sites per population, see [Function Tools and Assessment Calculations](FUNCTION_TOOLS_README.md).
+1. Priority Areas
+2. Critical Needs and Development Gaps
+3. Recommended STI Interventions
+4. Investment and Resource Priorities
+5. Expected Outcomes and Performance
 
-**AI-powered geospatial decision-support system for DOST.**
+All numbers come from deterministic analysis tools. The AI assistant, **GeoAgent**, only explains, orchestrates and drafts. Missing data is never treated as zero, and every recommendation is a draft until the LGU and DOST validate it.
 
-KonektaDOST helps DOST decision-makers identify community needs, assess development
-gaps, prioritise locations, and identify evidence-based science, technology and
-innovation (STI) interventions. A user selects a location on an interactive map, runs
-an assessment, and reviews five executive outputs:
-
-1. **Priority Areas** — where should DOST focus?
-2. **Critical Needs and Development Gaps** — what problems or unmet needs require attention?
-3. **Recommended Interventions** — what STI projects could address those needs?
-4. **Investment and Resource Priorities** — what resources, expertise, partnerships or funding may be required?
-5. **Expected Outcomes and Performance** — what measurable improvements should result?
-
-Recommendations are **advisory**. Authorised decision-makers determine actual priorities
-and investments.
+**Contents:** [Installation](#1-installation-guide) · [Running on another device](#17-running-on-another-device) · [Troubleshooting](#18-troubleshooting) · [Project structure](#2-project-structure) · [Project usage](#3-project-usage) · [User manual](#4-user-manual) · [More documentation](#5-more-documentation)
 
 ---
 
-## Status
+## 1. Installation guide
 
-This is currently a **data-first prototype**. What exists today:
+### 1.1 Requirements
 
-| Area | State |
-|---|---|
-| Interactive map with province → municipality drill-down | Working |
-| Eloquent models for all 7 domain tables | Working |
-| Barangay-level population figures (2024 census) | Loaded |
-| Health, education and safety facility locations | Loaded |
-| Accredited laboratory capability (tests, methods, fees) | Loaded |
-| Computed land area for all 43,638 geographies | Working |
-| Location assessment with measured indicators vs benchmarks | Working |
-| Priority Areas / Critical Gaps outputs | Partly — indicators only, no ranking |
-| Recommended Interventions (output 3) | Not built |
-| Investment Priorities (output 4) | Not built |
-| Expected Outcomes (output 5) | Not built |
-| AI narrative synthesis | Not built |
-| Report export | Not built |
+| Software         | Version                                                   | Notes                                                                                                                                  |
+| ---------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| PHP              | 8.2 or newer (tested on 8.5)                              | Extensions: `pdo_mysql`, `mbstring`, `openssl`, `curl`, `fileinfo`, `zip`, `gd`, `xml`. `composer install` lists any that are missing. |
+| Composer         | 2.x                                                       |                                                                                                                                        |
+| Node.js and npm  | Node 20 or newer (tested on 24)                           | Used to build the React frontend.                                                                                                      |
+| MySQL or MariaDB | MySQL 8 or MariaDB 10.4+ (tested on XAMPP's MariaDB 10.4) | The database is about 280 MB.                                                                                                          |
+| Internet access  |                                                           | For the AI gateway (GATES) and map tiles.                                                                                              |
 
-Assessment dimensions currently backed by real data: **population and social needs**,
-**health**, **education**, and **STI capacity** (partially). Environment, agriculture,
-infrastructure/digital, and connectivity have **no data yet** and must be reported as
-unavailable rather than scored.
+On Windows the simplest setup is **XAMPP** (PHP, MariaDB and Apache in one installer) plus Composer, Node.js and Git.
 
----
-
-## Requirements
-
-| | Version |
-|---|---|
-| PHP | 8.2+ |
-| Composer | 2.x |
-| Node.js | 20+ |
-| MySQL | 8.0+ (or MariaDB 10.6+) |
-| Laravel | 12 |
-| React | 19 |
-
----
-
-## Installation
+### 1.2 Get the code and install dependencies
 
 ```bash
+git clone <repository-url> konekta-dost
+cd konekta-dost-eshen
 composer install
 npm install
-cp .env.example .env        # Windows: copy .env.example .env
 ```
 
-Set your database credentials in `.env`. `.env.example` is already configured for
-MySQL — the only key you will normally need to change is `DB_PASSWORD`.
-
-### 1. Import the database — required
-
-> **The seven domain tables are not created by migrations.**
->
-> `provinces`, `municipalities`, `barangays`, `population_figures`, `facilities`,
-> `laboratories` and `facility_tests` contain imported reference data and have no
-> migration files. A fresh clone without the data dump is a **non-functional
-> application** — the map renders nothing and every model throws *table not found*.
-
-Obtain `konektadost.sql` from the project maintainers, then:
+### 1.3 Create the environment file
 
 ```bash
-mysql -u root konektadost < konektadost.sql
+copy .env.example .env        # macOS/Linux: cp .env.example .env
+php artisan key:generate
 ```
 
-**Do not commit the dump.** It is roughly 80 MB and will permanently bloat every clone.
+Open `.env` and set at least:
 
-### 2. Run migrations
+```dotenv
+APP_URL=http://127.0.0.1:8000
+
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=konektadost
+DB_USERNAME=root
+DB_PASSWORD=
+```
+
+The AI settings are covered in [1.5](#15-configure-the-ai-gates).
+
+### 1.4 Set up the database
+
+The geography, population, facility, laboratory, telecom, road, agriculture and DOST catalog tables are **imported data, not migrations**. A fresh `php artisan migrate` on an empty database does **not** create them. Some early migrations also create tables that the data already contains, so always start from a **complete copy of a working database**.
+
+**Step 1: Get a database copy.** Either download the backup from the team's Google Drive folder:
+
+<https://drive.google.com/drive/folders/1ojUeuHnRfWpIANlDNy0v5-_APo4pVScg?usp=sharing>
+
+or export the current database from a working PC (XAMPP paths shown):
+
+```bat
+"C:\xampp\mysql\bin\mysqldump.exe" -u root --single-transaction --routines --default-character-set=utf8mb4 --result-file=konektadost.sql konektadost
+```
+
+`--result-file` matters on Windows: redirecting with `>` in PowerShell writes UTF-16 and corrupts the dump.
+
+**Step 2: Allow large rows.** Boundary polygons make some rows several megabytes. In XAMPP open `C:\xampp\mysql\bin\my.ini`, set the following under `[mysqld]`, then restart MySQL from the XAMPP Control Panel:
+
+```ini
+max_allowed_packet=512M
+```
+
+**Step 3: Create the database and import.** This works in any terminal:
+
+```bat
+"C:\xampp\mysql\bin\mysql.exe" -u root -e "CREATE DATABASE konektadost CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+"C:\xampp\mysql\bin\mysql.exe" -u root --max_allowed_packet=512M konektadost -e "source C:/path/to/konektadost.sql"
+```
+
+**Step 4: Apply pending migrations and refresh the read cache:**
 
 ```bash
-php artisan migrate
+php artisan migrate          # runs only migrations newer than the copy
+php artisan read-cache:clear
 ```
 
-### 3. Compute land area
+Never run `migrate:fresh`, `migrate:reset` or `migrate:refresh` on `konektadost`: they drop the imported data.
+
+**Step 5: Accounts.** A copied database keeps its user accounts. For an empty `users` table only, create the team's two admin and two user accounts listed in `database/seeders/UserSeeder.php`, then change their passwords after signing in:
 
 ```bash
-php artisan geo:compute-area              # add --dry-run to preview
+php artisan db:seed --class=UserSeeder
 ```
 
-Fills `area_km2` on all geography tables from the stored GeoJSON. Takes about a minute.
-A dump produced after this step already contains the values, in which case skip it.
+Anyone can also register at `/register` (role `user`); an admin can change roles in **Admin › Users**.
 
-### 4. Compute reference rates
+**Step 6: Older backups only.** If assessments show almost no facilities or laboratories for large cities, rebuild the resource location links from coordinates:
 
 ```bash
-php artisan benchmarks:compute            # add --dry-run to preview
+php artisan resources:relink-locations          # dry run: shows what would change
+php artisan resources:relink-locations --apply  # writes a backup CSV to storage/app/diagnostics first
 ```
 
-Derives the national reference rate for every indicator from the loaded data and
-stores it in the `benchmarks` table. Without this, indicators are measured but
-cannot be judged against anything. Takes a few minutes.
+### 1.5 Configure the AI (GATES)
 
-### 5. Finish setup
+There is **no separate AI server to install**. GeoAgent and the assessment AI call the **GATES LLM gateway**, a cloud service, over HTTPS from the Laravel server. Each machine that runs KonektaDOST needs internet access and these `.env` values:
+
+```dotenv
+GATES_API_KEY=gates_your_key_here        # created in the GATES dashboard
+GATES_BASE_URL=https://ga-40e2b0fc69114ba88bbb8d1cc6ec4d42.ecs.us-east-1.on.aws
+GATES_MODEL=openai.gpt-6-luna
+```
+
+- `GATES_BASE_URL` is the gateway origin from the GATES dashboard, **without** `/v1`. A key works only with the gateway of the environment it was created in.
+- Once `GATES_API_KEY` is set, GATES is used automatically. Without it the app falls back to OpenAI (`OPENAI_API_KEY`, `OPENAI_MODEL`). `AI_PROVIDER=gates` or `AI_PROVIDER=openai` forces one.
+- Optional: `GATES_TIMEOUT` (default 60 s per call), `GATES_REASONING_EFFORT` (default `low`), `GATES_CA_BUNDLE` (see below).
+- Keep the key out of Git, screenshots and any `VITE_` variable. Rotate it in the GATES dashboard if it leaks.
+
+**HTTPS certificates on Windows.** PHP must be able to verify the gateway's certificate. XAMPP normally sets `curl.cainfo` in `php.ini`. If the AI reports a certificate or connection error, download <https://curl.se/ca/cacert.pem> and point to it with an **absolute path on this machine**:
+
+```dotenv
+GATES_CA_BUNDLE=C:/certs/cacert.pem
+```
+
+`GATES_CA_BUNDLE` falls back to `OPENAI_CA_BUNDLE`. If you copied `.env` from another PC, clear or fix any `OPENAI_CA_BUNDLE` path that does not exist here, or every AI call will fail.
+
+**Verify:**
 
 ```bash
-npm run build          # or: npm run dev
-php artisan storage:link
+php artisan config:clear
+php artisan ai:check            # free: checks URL, key and model, no credit used
+php artisan ai:check --tools    # tiny paid check: one tool round trip, like a GeoAgent turn
 ```
 
-### 6. Create a login
+If AI is not configured, everything else keeps working. Assessments, maps and the computed action plan do not need it.
 
-The database ships with existing accounts only. Create your own:
+### 1.6 Run the application
+
+**Development on one PC** (web server, queue worker and Vite with hot reload):
 
 ```bash
-php artisan tinker
->>> \App\Models\User::create(['name' => 'Your Name', 'email' => 'you@example.com', 'password' => bcrypt('secret')]);
+composer dev
 ```
 
-Then visit `/login` and open **Service Area Map** from the sidebar.
+Open <http://127.0.0.1:8000>.
+
+**For everyday use, or for other devices,** build the frontend once instead of running Vite:
+
+```bash
+npm run build
+```
+
+Then delete `public/hot` if it exists. `npm run dev` creates it, and while it exists pages load scripts from the Vite dev server, which other devices cannot reach. Rebuild after every frontend change you pull.
+
+### 1.7 Running on another device
+
+There are two situations.
+
+**A. Install KonektaDOST on another computer.** Follow 1.1 to 1.5 on that computer, using the same database copy, and check:
+
+1. `.env` was created for this machine (`php artisan key:generate`, correct `DB_*`), not copied with paths from another PC.
+2. The `GATES_*` values are set and `php artisan ai:check` passes.
+3. `npm run build` was run and `public/hot` does not exist.
+
+**B. Open KonektaDOST from phones or laptops on the same network.** Run it on one PC (the server) and let others connect:
+
+1. Find the server's IP address: run `ipconfig` and note the IPv4 Address, e.g. `192.168.1.20`.
+2. Set `APP_URL=http://192.168.1.20:8000` in `.env`, then run `php artisan config:clear`.
+3. Build the frontend (`npm run build`) and delete `public/hot`.
+4. Start the server so it listens on the network:
+
+    ```bash
+    php artisan serve --host=0.0.0.0 --port=8000
+    ```
+
+5. Allow the port through Windows Firewall once, in PowerShell as Administrator:
+
+    ```powershell
+    New-NetFirewallRule -DisplayName "KonektaDOST 8000" -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow
+    ```
+
+6. On the other devices open `http://192.168.1.20:8000`.
+
+**For several users at once, use Apache.** `php artisan serve` runs one PHP process, and a GeoAgent reply can take up to 2½ minutes, so other users wait meanwhile. Apache in XAMPP serves many requests in parallel:
+
+1. Add a virtual host to `C:\xampp\apache\conf\extra\httpd-vhosts.conf` (adjust the path):
+
+    ```apache
+    <VirtualHost *:80>
+        DocumentRoot "C:/path/to/konekta-dost-eshen/public"
+        <Directory "C:/path/to/konekta-dost-eshen/public">
+            AllowOverride All
+            Require all granted
+        </Directory>
+    </VirtualHost>
+    ```
+
+2. In `C:\xampp\php\php.ini` set `max_execution_time = 180`, so a long GeoAgent reply is not cut off.
+3. Set `APP_URL=http://192.168.1.20`, `APP_ENV=production` and `APP_DEBUG=false`, then run `php artisan config:clear`.
+4. Restart Apache from the XAMPP Control Panel, allow port 80 through the firewall, and open `http://192.168.1.20`.
+
+### 1.8 Troubleshooting
+
+| Symptom                                                 | Fix                                                                                              |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `Table ... already exists` during `php artisan migrate` | The database is not a complete copy. Import a full dump (1.4), including its `migrations` table. |
+| `MySQL server has gone away` during import              | Raise `max_allowed_packet` (1.4, Step 2) and restart MySQL.                                      |
+| Other devices see a blank page or missing styles        | Run `npm run build` and delete `public/hot`.                                                     |
+| `Vite manifest not found`                               | Run `npm run build`.                                                                             |
+| GeoAgent says "The AI assistant is not configured"      | Set `GATES_API_KEY` and `GATES_BASE_URL`, then `php artisan config:clear`.                       |
+| "The AI gateway rejected the server key"                | Use a key created for the same gateway as `GATES_BASE_URL`.                                      |
+| "The AI gateway has no credit available"                | Check the balance on the GATES dashboard.                                                        |
+| "The configured AI model is not enabled"                | Run `php artisan ai:check` and set `GATES_MODEL` to a listed model.                              |
+| AI fails with `cURL error 60` or `77` (certificates)    | Set `GATES_CA_BUNDLE` to a valid absolute path on this machine (1.5).                            |
+| GeoAgent stops after about 2 minutes                    | Raise `max_execution_time` in `php.ini` to 180.                                                  |
+| Assessments show almost no facilities or laboratories   | Run `php artisan resources:relink-locations --apply` (1.4, Step 6).                              |
+| Data edited directly in MySQL does not appear           | Run `php artisan read-cache:clear`.                                                              |
+| "Your session has expired"                              | Refresh the page; sign in again if asked.                                                        |
 
 ---
 
-## Data model
+## 2. Project structure
 
-| Table | Rows | Notes |
-|---|---|---|
-| `provinces` | 81 | GADM level 1, MultiPolygon GeoJSON |
-| `municipalities` | 1,628 | GADM level 2 |
-| `barangays` | 41,929 | GADM level 3 |
-| `population_figures` | 43,557 | 2024 census, one row per area |
-| `facilities` | 19,659 | Health, education and safety locations |
-| `laboratories` | 69 | Accredited lab capability |
-| `facility_tests` | 2,846 | Tests, methods, references and fees |
+```text
+konekta-dost-eshen/
+├─ app/
+│  ├─ Console/Commands/      ai:check, resources:relink-locations, app:dost-project-query
+│  ├─ FunctionTools/         the 30 deterministic analysis tools (Layers A–F) and their registry
+│  │  ├─ LayerA … LayerF/    data retrieval, sector analysis, gaps and priorities, catalog, matching, planning
+│  │  └─ Support/            location resolver and spatial helpers
+│  ├─ Http/Controllers/      LocationController (assessments), PlanningChatController (GeoAgent),
+│  │                         AssessmentActionPlanController (saved plans), UserDashboardController, Admin/*
+│  ├─ Models/                Province, Municipality, Barangay, Facility, Laboratory, TelecomSite, DostTech, …
+│  └─ Support/
+│     ├─ Ai/                 ResponsesClient (GATES or OpenAI), PlanningChatService (GeoAgent), chat history
+│     ├─ Assessment/         indicators, reference rates, gap diagnostics, AI explanation, saved action plans
+│     ├─ Map/                geography explorer, map markers, roads, province resources
+│     ├─ Caching/            ReadCache: computed results cached and refreshed after database writes
+│     ├─ DataEntries/        admin data-entry definitions (one per sector)
+│     └─ Dashboard/          user and admin dashboard data
+├─ config/services.php       AI provider settings (ai, gates, openai)
+├─ database/
+│  ├─ migrations/            application tables only: users, sessions, cache, GeoAgent history, saved plans, indexes
+│  ├─ seeders/UserSeeder.php team accounts
+│  └─ schema/                SQL for tables delivered outside migrations (telecom sites)
+├─ docs/                     feature notes (planning chat, map explorer, caching, reports)
+├─ gates_llm-0.2.0/          GATES Python SDK, kept as reference only (the app calls the gateway's HTTP API)
+├─ resources/
+│  ├─ js/pages/              Inertia pages: welcome, auth, users/dashboard, users/intellegence-map,
+│  │                         location-assessment (+ its steps, action plan and saved-plan views), admin/*
+│  ├─ js/components/         planning-chat (GeoAgent), philippine-map, assessment-method charts, ui/
+│  ├─ js/lib/                report and action-plan builders, PDF generators, CSRF helper
+│  ├─ css/app.css            Tailwind styles and chart palette
+│  ├─ fonts/noto-sans/       fonts embedded in the PDF exports
+│  └─ images/                DOST logo
+├─ routes/web.php            all web and JSON routes
+├─ tests/Feature/            PHP feature tests (most use an isolated in-memory database)
+└─ tests/Frontend/           Node tests for the report, action-plan, PDF and CSRF logic
+```
 
-### Conventions
-
-These two rules hold throughout and any new dataset should follow them.
-
-**1. `gadm_id` is the join key.** It is the only field that is unique and non-null
-across all three geography tables, and it is what the denormalised columns already
-reference:
-
-- `population_figures.area_ref` → `municipalities.gadm_id` / `barangays.gadm_id`
-- `barangays.municipality_gadm_id` → `municipalities.gadm_id`
-- `population_figures.municipality_id` → the parent municipality, populated on **every**
-  row including barangay-level rows
-
-Do **not** use `psgc_code` as a key. It is not unique (see Known Issues) and the
-`provinces` table does not have the column at all. Where a human-facing Philippine
-identifier is needed, store `psgc_corr` alongside `gadm_id`.
-
-**2. Datasets are versioned and sourced.** `population_figures` is keyed on
-`(area_level, area_ref, vintage)` and carries `source`, `source_url` and `match_status`
-so that every figure can be traced and every failure to resolve an area is recorded.
-
-### Naming caveat
-
-`municipalities`, `barangays` and `population_figures` all have a plain string column
-named `province` or `municipality`. In Eloquent a real column always wins over a
-same-named relation, so those relations are named `provinceModel()` and
-`municipalityModel()`. Read the raw columns with `getAttribute('province')`.
-
-Names in the source data have spaces stripped (`QuezonCity`, `MetropolitanManila`). The
-GeoJSON output de-spaces them for display; raw column values are untouched.
+**Stack:** Laravel 12, PHP 8.2+, Inertia 2, React 19, TypeScript, Vite 6, Tailwind 4, MapLibre GL and Leaflet (maps), jsPDF (PDF exports), MySQL/MariaDB, and the GATES gateway (OpenAI-compatible Responses API) for AI.
 
 ---
 
-## Land area
+## 3. Project usage
 
-`area_km2` is **computed from the GeoJSON polygons**, not imported.
+Everyday commands, run from the project folder:
 
-Barangay-level land area is not published by any Philippine agency, so a single
-consistent method was applied to all three levels. Area uses the spherical-excess
-approximation with a mean Earth radius of 6371.0088 km, summing every part of a
-MultiPolygon and subtracting holes.
+| Task                                                  | Command                                                         |
+| ----------------------------------------------------- | --------------------------------------------------------------- |
+| Start the development servers                         | `composer dev`                                                  |
+| Build the frontend for use                            | `npm run build`                                                 |
+| Serve on the network                                  | `php artisan serve --host=0.0.0.0 --port=8000`                  |
+| Check the AI setup (free)                             | `php artisan ai:check`                                          |
+| Test a real AI tool round trip (tiny cost)            | `php artisan ai:check --tools`                                  |
+| Refresh computed results after editing data in MySQL  | `php artisan read-cache:clear`                                  |
+| Rebuild resource location links (dry run, then apply) | `php artisan resources:relink-locations` / `--apply`            |
+| Apply new migrations after pulling code               | `php artisan migrate`                                           |
+| Clear cached configuration after editing `.env`       | `php artisan config:clear`                                      |
+| Run one PHP test file                                 | `php artisan test --compact tests/Feature/PlanningChatTest.php` |
+| Run the frontend tests                                | `node --test tests/Frontend/*.test.cjs`                         |
+| Type-check, lint and format the frontend              | `npx tsc --noEmit`, `npm run lint`, `npm run format`            |
+| Format PHP                                            | `./vendor/bin/pint`                                             |
 
-Validation against known values:
+**Testing notes.** `phpunit.xml` pins `AI_PROVIDER=openai` with faked responses, so tests never reach the GATES gateway or spend credit. Tests that use `RefreshDatabase` currently stop at setup, because the planning migration's foreign key needs the imported `municipalities` table. The feature tests that build their own in-memory schema (AI, GeoAgent, saved plans, map) run normally.
 
-| Check | Result |
-|---|---|
-| 1° × 1° box at the equator | 12,363 km² (true ~12,310) |
-| Quezon City polygon | **148.78 km² vs 148.66 official — 0.08% error** |
-| Total, all provinces | 296,963 km² vs PSA 300,000 km² — **0.99% under** |
-| Province vs sum of its municipalities | 72 of 81 provinces agree to within 0.5% |
-
-### Do not mix this with PSA land area
-
-PSA publishes land area in Statistical Yearbook Table 1.1 (population by region and
-province). These values are **administrative area**, which for island provinces includes
-surrounding marine waters, so they are not the same measurement:
-
-- **Sulu** — 1,559 km² of landmass vs 4,547 km² PSA administrative area
-- The PSA table also contains outright errors (**Lanao del Sur** is listed at 15,055 km²,
-  which is roughly the size of the entire BARMM region)
-
-PSA's land area is published **only for census 2020**; the 2024 column is blank.
-
-Computed areas are the default in this application. Where a PSA figure is quoted in an
-output, label it explicitly as administrative area.
+**After pulling new code:** run `composer install`, `npm install`, `php artisan migrate`, `npm run build` and `php artisan read-cache:clear`.
 
 ---
 
-## Computations
+## 4. User manual
 
-Every figure this application reports is produced by one of the formulas below.
-Nothing is estimated, modelled or inferred. Each carries its source and vintage.
+### 4.1 Signing in and roles
 
-### 1. Land area (`geo:compute-area`)
+- Open the site and choose **Log in**, or **Register** to create an account (new accounts get the `user` role).
+- **Users** and **technicians** get the user workspace: Dashboard, Intelligence Map, assessments and GeoAgent.
+- **Admins** get the admin workspace with data management; an admin assigns roles in **Admin › Users**.
 
-Spherical-excess approximation over the stored GeoJSON:
+### 4.2 Dashboard
 
-```
-A = R² / 2 · Σ ( Δλ · (2 + sin φ₁ + sin φ₂) )
-```
+- **Start a location assessment:** search for a city or municipality and choose **Run assessment**.
+- Platform coverage: how many provinces, municipalities, barangays, facilities, laboratories, cell sites and roads are recorded.
+- The DOST technology catalog and STI programs, and charts of DOST project history.
+- **Your planning activity:** your saved action plans and GeoAgent conversations. **Open** reopens one.
 
-- `R` = 6371.0088 km (mean Earth radius)
-- `Δλ` = longitude difference between consecutive ring vertices, in radians
-- `φ` = latitude of each vertex, in radians
-- Summed per ring, then **all parts of a MultiPolygon are added and holes
-  (rings after the first in each polygon) are subtracted**
-- Stored as `area_km2`, rounded to 4 decimal places
+### 4.3 Intelligence Map
 
-Validation: a 1° × 1° equatorial box returns 12,363 km² (true ≈ 12,310); the Quezon
-City polygon returns 148.78 km² against 148.66 official.
+- Search for any province, city/municipality or barangay, or click the map to drill down. The selection is kept in the page address, so you can share or bookmark it.
+- **Map markers and legend** turns layers on and off: health, education and safety facilities, laboratories, cell sites and, once a location is selected, **Roads**.
+- The province resource card summarizes recorded resources and agriculture estimates. **View location assessment** opens the assessment for the selected place.
 
-### 2. Density
+### 4.4 Location assessment
 
-```
-density = population / area_km2          (rounded to 2 dp, persons per km²)
-```
+The assessment page has a summary at the top and five steps:
 
-Uses only `matched` population rows. Returns nothing if `area_km2` is null or zero.
+| Step                                  | What it shows                                                                                                                    |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Layer A · Area & assets               | Population, area, classification, available datasets and recorded assets.                                                        |
+| Layer B · Sector needs                | Each indicator (e.g. health facilities per 100,000 people) against its national reference rate.                                  |
+| Layer C · Priority needs & areas      | Development gaps with severity (0–100), and the ranked target areas: barangays for a city, cities/municipalities for a province. |
+| Layer D · DOST catalog                | The DOST technologies and STI programs that could apply.                                                                         |
+| Layer E · Technology & laboratory fit | Which catalog options match the gaps, how well (0–100), and the laboratory support pathway.                                      |
 
-### 3. Facility and laboratory rates
+- **At a glance** cards show the top need, best-fit technology, where to deploy first, and how much of the evidence is comparable. Click a card to jump to its step.
+- **How was this computed?** shows every formula with this location's real numbers.
+- **AI interpretation** (Layers C and E) explains the computed results in plain language. It never changes the numbers.
+- Warnings at the top flag missing population data or conflicting inventory locations.
 
-```
-rate per 100,000 = count / population × 100,000        (rounded to 3 dp)
-rate per million = count / population × 1,000,000      (rounded to 3 dp)
-```
+**Action plan.** **View action plan** opens the plan: priority areas, critical needs, recommended options, a 12-week proposed schedule (Validate, Prepare, Pilot, Review), the activity matrix and expected outcomes.
 
-`count` is the number of facilities or laboratories assigned to the location.
-Applied to: health facilities, hospitals, pharmacies, schools, elementary schools,
-laboratories, and distinct laboratory tests.
+- Opening the plan **saves it automatically** to your account as a version. The footer confirms "Saved as version N". An unchanged plan is not saved twice.
+- **Download** offers two PDFs:
+    - **Action plan:** targets, technologies, timeline and matrix.
+    - **Full assessment report:** every step, chart and formula.
 
-### 4. Distinct laboratory tests
+### 4.5 GeoAgent (AI planning assistant)
 
-`facility_tests` holds 2,846 rows but only 2,556 distinct
-`(laboratory_id, test_name, method)` combinations, because the unique index is on
-`(laboratory_id, source_record_id)`. Tests are therefore counted as **distinct
-`(test_name, method)` pairs**, not raw rows, so duplicate source records do not
-overstate capability.
+1. Click **Talk to GeoAgent** (bottom-right button or sidebar) and choose a municipality. On an assessment page it is chosen for you.
+2. Ask in English or Filipino, for example:
+    - "What are the biggest gaps here?"
+    - "Which DOST technology fits this municipality best?"
+    - "Where should we deploy it first?"
+    - "Compare with Quezon City."
+    - "Draft an action plan with a 6-month timeline."
+3. GeoAgent runs the same analysis tools as the assessment and **answers only from KonektaDOST's recorded data**. If something is not recorded, it says so instead of guessing.
+4. A complete plan (all five sections and the activity matrix) is **saved automatically** as a new version. Use **View large** to read it and **Download PDF** to export it.
+5. **History** resumes earlier conversations, **Saved plans** opens earlier versions, and **New conversation** starts over without deleting anything. **Stop** cancels a reply in progress.
 
-### 5. National reference rate (`benchmarks:compute`)
+GeoAgent plans one municipality at a time. To plan elsewhere, change the municipality in the picker.
 
-```
-national rate = total facilities nationwide / total matched population × multiplier
-```
+### 4.6 Generated action plans
 
-`total` counts **all** facilities of that type in the country, including any not
-assigned to a municipality. The denominator is the summed population of `matched`
-municipality-level figures (111,325,162 for the current vintage), not the PSA
-national total, so numerator and denominator cover the same areas.
+The sidebar's **Generated action plans** lists all your saved plans, newest first:
 
-National density is the exception — density has no total to divide, so:
+- **GeoAgent** plans open in the chat window.
+- **Assessment** plans open in a viewer with **Download PDF** and **Open assessment**.
 
-```
-national density = total matched population / Σ area_km2 of all municipalities
-```
+Use the arrow buttons to page through older plans.
 
-### 6. Median and 90th percentile
+### 4.7 Admin workspace
 
-Computed across the per-area rate distribution, for areas with a matched population
-figure (1,612 of 1,628 municipalities):
+- **Overview:** platform usage (accounts, GeoAgent activity, saved plans, most-planned locations).
+- **Intelligence Map:** the same explorer as in the user workspace.
+- **Data entries:** add, edit and delete records for health, education and safety facilities, laboratories and their services, cell sites, DOST technologies, STI programs, DOST projects and agriculture estimates. A record saved without a location gets its city/municipality and barangay from its coordinates.
+- **Users:** manage accounts and roles.
 
-```
-median = sorted_rates[ floor(n / 2) ]
-p90    = sorted_rates[ floor(n × 0.9) ]
-```
+### 4.8 Reading the results correctly
 
-These are **context only**, never the comparison benchmark. The median for hospitals
-and pharmacies is exactly `0.00`, because more than half of all municipalities have
-neither — comparing against zero would make every area look adequate.
-
-### 7. Gap against benchmark
-
-```
-gap % = (value − benchmark) / benchmark × 100
-```
-
-Null when the benchmark is zero or null.
-
-### 8. Shortfall rule
-
-```
-shortfall = ( higherIsBetter AND value <  benchmark )
-         OR ( NOT higherIsBetter AND value > benchmark )
-```
-
-Only density sets `higherIsBetter = false`. This is deliberate: density *above* the
-national rate signals **pressure on services**, not surplus capacity. So a densely
-populated municipality is flagged, which is the opposite direction to every other
-indicator.
-
-A shortfall is never claimed without **both** a measured value and a benchmark.
-
-### 9. Confidence rules
-
-An indicator is marked `confidence: low` when either condition holds. These exist
-because the underlying data has known gaps, and a confident wrong finding is worse
-than an explicit uncertainty.
-
-| Condition | Meaning |
-|---|---|
-| `volunteerSourced AND value == 0` | A zero from OpenStreetMap means nothing is *recorded*, not that nothing exists |
-| `coverageCheck share > coverageWarnAbove` | The source field this indicator depends on is mostly blank for this area |
-
-Current coverage check: `elementary_schools_per_100k` uses
-`unknown_education_share` = share of the area's education facilities whose `level`
-is null, empty, or `'unknown'`, with a threshold of **0.20 (20%)**.
-
-```
-unknown_education_share = unclassified education facilities / all education facilities
-```
-
-### 10. Population selection
-
-Only `match_status = 'matched'` rows are used. In the current dataset this is an
-exact partition: all 41,764 matched rows carry a population and all 1,793
-`needs_review` rows carry `NULL`. Treating that null as zero would understate every
-rate, so an area without a matched figure reports **no data** rather than a score.
-
-### 11. Land area versus PSA land area
-
-These are different measurements and are never mixed. PSA reports *administrative*
-area, which for island provinces includes surrounding marine waters — Sulu reads
-4,547 km² there against 1,559 km² of actual landmass. The PSA table also contains
-outright errors (Lanao del Sur is listed at 15,055 km²). Computed polygon area is
-the default throughout.
+- **No record is not zero.** "No cell site recorded" does not prove there is no signal; missing road data does not prove isolation.
+- **Reference rates are comparisons.** National reference rates are computed from the imported data, not official minimum standards.
+- **Agriculture figures are modeled estimates**, not observed yields.
+- **Scores rank screening priority.** Gap severity, target-area and match scores are not probabilities of success.
+- **Project history is background.** Historical DOST projects are evidence, not technologies available now.
+- **Plans are drafts.** Schedules, costs, partners and sites are proposals until the LGU and DOST confirm them.
 
 ---
 
-## Known data issues
+## 5. More documentation
 
-Documented so they are not rediscovered. None are fixed yet.
+| File                                                   | Contents                                                                                |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| [CLAUDE.md](CLAUDE.md)                                 | Current technical guide: architecture, data, conventions and backlog (most up to date). |
+| [FUNCTION_TOOLS_README.md](FUNCTION_TOOLS_README.md)   | Formulas, scoring and worked examples for every analysis tool.                          |
+| [AI_USAGE_README.md](AI_USAGE_README.md)               | Guide for using Claude on claude.ai with KonektaDOST exports.                           |
+| [docs/PLANNING_CHAT.md](docs/PLANNING_CHAT.md)         | GeoAgent configuration and behaviour.                                                   |
+| [docs/MAP_EXPLORER.md](docs/MAP_EXPLORER.md)           | Intelligence Map setup, terrain and imagery.                                            |
+| [docs/caching.md](docs/caching.md)                     | How the read cache works.                                                               |
+| [gates_llm-0.2.0/README.md](gates_llm-0.2.0/README.md) | GATES SDK manual (the gateway's API).                                                   |
 
-**1. Duplicate PSGC and a stray polygon outside Quezon.**
-`municipalities.id = 1294` is `Hinunangan` filed under Quezon with `psgc_code = 86403`,
-which is also used by the legitimate `Hinunangan, Southern Leyte`. Its polygon sits at
-latitude 10.42–10.47, roughly **450 km south of Quezon**, overlapping Southern Leyte.
-It appears as parts 0 and 1 of the Quezon province MultiPolygon. Rendering Quezon
-province as-is shows a detached landmass in the Leyte Sea.
-
-**2. 1,793 areas (4.1%) have no population figure.**
-`match_status` and population are an exact partition: every `matched` row has a figure
-and every `needs_review` row has `population = NULL`. Breakdown: 1,223 `unmatched_parent`
-(often placeholder names such as `Barangay307`), 568 `unmatched_name`, 2 `ambiguous`.
-Always query with `PopulationFigure::matched()` and treat a null population as
-**unknown, never zero**.
-
-**3. Unmapped island area in 9 provinces.**
-For coastal and island provinces the municipality polygons do not fully cover the
-province polygon: Laguna **+896.7 km² (33%)**, Lanao del Sur +386.8, Batangas +241.0,
-Oriental Mindoro +76.7, Surigao del Norte +72.7, Agusan del Norte +72.1, Camarines Sur
-+38.5, Sultan Kudarat +32.2, Maguindanao +32.0. Likely minor islands assigned to no LGU.
-
-**4. Facilities are 100% OpenStreetMap, not official statistics.**
-`facilities.source = osm_hot` for all 19,659 rows. OSM coverage tracks urbanisation and
-volunteer activity, not need. **293 of 1,628 municipalities have zero recorded
-facilities**, which cannot be distinguished from "not mapped". Always phrase as *no
-facilities recorded*, never *no facilities*.
-
-**5. Duplicate laboratory tests.**
-`facility_tests` has 2,846 rows but only 2,556 distinct `(laboratory_id, test_name,
-method)` combinations. Also 5 laboratories are flagged `is_outside_philippines` and 17
-have a null `municipality_id`.
-
----
-
-## Adding a dataset
-
-Follow the `population_figures` pattern so the evidence layer works uniformly:
-
-```
-area_ref      GADM id of the area the row describes
-vintage       or retrieved_at, for time series
-source        short source key
-source_url    where it came from
-match_status  matched | ambiguous | unmatched_name | unmatched_parent
-```
-
-Never present a value without its source and date. Distinguish measured findings from
-estimates and geographic proxies — a confidently stated finding the data cannot support
-is worse than an explicit gap.
-
-To fetch official PSA statistics programmatically, use the PXWeb API at
-`openstat.psa.gov.ph` (the main `psa.gov.ph` site blocks scripted requests with HTTP 403).
-The MGB ULAP-NGA geoportal now requires a token.
-
----
-
-## Map
-
-`/location` — click a province to drill into its cities and municipalities, or use the
-dropdowns. The selected area appears in the side panel with its PSGC code, GADM ID
-(copyable) and coordinates.
-
-State lives in the URL (`/location?province=PHL.47_1&city=PHL.47.14_1`), so selections
-are shareable and browser Back moves between levels. Drill-down uses Inertia partial
-reloads, so only the municipalities for the selected province are fetched — the
-initial province payload is ~1.1 MB (~320 KB gzipped) and each drill-down is ~21 KB.
-
-Map tiles are OpenStreetMap; no API key is required.
-
----
-
-## Assessment
-
-`/location/assess?city=<gadm_id>&focus=<dimension>` — the assessment page.
-
-The user selects a city or municipality, chooses a focus (general, or one of the
-ten framework dimensions), and the system **measures** indicators from source data
-and compares them to the national reference rate.
-
-Currently assessed indicators:
-
-| Indicator | Unit | Dimension |
-|---|---|---|
-| `population_density` | persons per km² | Population and social needs |
-| `health_facilities_per_100k` | per 100,000 | Health |
-| `hospitals_per_100k` | per 100,000 | Health |
-| `pharmacies_per_100k` | per 100,000 | Health |
-| `schools_per_100k` | per 100,000 | Education |
-| `elementary_schools_per_100k` | per 100,000 | Education |
-| `laboratories_per_million` | per million | STI capacity |
-| `laboratory_tests_per_million` | per million | STI capacity |
-
-### Rules the assessor enforces
-
-These exist so the system cannot produce a confident wrong finding:
-
-- **A count is not a finding.** Every indicator is a rate compared to a benchmark.
-  A raw count is never presented as a gap.
-- **Benchmarks are the national rate**, computed as all facilities of that type
-  divided by total population. This is *not* an official standard or service norm,
-  and the assessment page says so.
-- **Zero from OpenStreetMap means "none recorded".** A zero is reported as low
-  confidence with an explanation, because crowd-sourced data records an absence in
-  the map, not an absence in the area. This is the single most likely source of a
-  false positive.
-- **Sparse source fields downgrade confidence.** Indicators that depend on a
-  partially populated field carry a coverage check. Quezon City, for example,
-  reports 0.097 elementary schools per 100,000 against a national 1.42 — but 47% of
-  its education facilities have no recorded level, so the result is marked low
-  confidence rather than presented as a 93% shortfall.
-- **Unmatched population rows are never counted.** They carry a null population;
-  treating that as zero would understate every rate. Areas without a matched figure
-  report "no data" rather than a score.
-- **Unsupported dimensions report nothing.** Choosing Environment, Agriculture,
-  Infrastructure or Economy returns no indicators and an explicit statement that no
-  dataset is available.
-
-### Layout
-
-```
-app/Support/Assessment/
-  Indicator.php          one indicator definition (key, unit, dimension, provenance)
-  IndicatorCatalog.php   the 8 indicators and the 10 framework dimensions
-  IndicatorResult.php    one measurement + confidence + shortfall judgement
-  LocationAssessor.php   computes indicators for a location
-app/Console/Commands/ComputeBenchmarkCommand.php   benchmarks:compute
-```
-
-Indicators are declared once in `IndicatorCatalog`. The assessor, the benchmark
-command and the UI all read from it, so an indicator's key, unit, dimension and
-provenance cannot drift apart.
-
----
-
-## Tests
-
-In the admin and user Intelligence Maps, select a province, municipality, or barangay, then check **Roads** in **Map markers and legend** to display orange road lines from `roads`. The Roads checkbox starts unchecked and stays disabled until a location is selected; Show all and Hide all include it. Barangay selections use `road_barangay.barangay_id` to choose road IDs and recorded barangay lengths, including explicitly linked cross-municipality segments. The `roads` table supplies geometry and road attributes; there is no fallback to all municipality roads. Click a road to inspect its recorded attributes. Original linked road segments can cross the selected boundary. Returning to the Philippines clears the overlay and cancels pending road requests; the national view does not fetch road geometry. Large selections load progressively through the authenticated `locations/{level}/{id}/roads` endpoint.
-
-```bash
-php artisan test --filter=RoadMapTest
-```
-
-### AI explanations in location assessment
-
-1. Set `OPENAI_API_KEY` and `OPENAI_MODEL` in `.env`. The key stays on the Laravel server.
-2. Run `php artisan config:clear` after changing these settings.
-3. Open a city or municipality assessment, then **Gaps & Priority** or **Interventions**. Opening either tab sends computed assessment evidence to OpenAI and generates one shared sector analysis. Other assessment tabs load without an AI request.
-4. Use the sector selectors to narrow the tables. Expand source notes, matching criteria, and implementation details when needed.
-
-AI explanations preserve the computed scores and benchmarks. Catalog recommendations are screening leads for LGU/DOST validation. The server validates catalog references and caches successful analysis for six hours, keyed by the evidence and model; changed evidence triggers a new analysis. Provider failures keep computed results visible and offer a retry.
-
-Empty sector results now explain whether there is no benchmark shortfall, insufficient evidence, or no implemented gap model. Agriculture and roads currently have descriptive analysis but no comparable gap indicator. Population density alone cannot select a technology. If linked inventory coordinates or barangay parents conflict with the selected municipality, the report flags the affected datasets and withholds their service-rate comparisons until the source links are verified. These checks do not rewrite source records.
-
-If PHP reports an HTTPS certificate error, set `OPENAI_CA_BUNDLE` to an absolute path to a trusted PEM CA bundle. TLS certificate verification stays enabled. `OPENAI_TIMEOUT` defaults to 60 seconds. Do not put the API key in a `VITE_` variable.
-
-Focused checks:
-
-```bash
-php artisan test --filter="AssessmentAiTest|FunctionToolDataIntegrityTest|AssessmentComputationCacheTest"
-npx tsc -p tsconfig.map-explorer.json --noEmit
-```
-
-```bash
-php artisan test
-```
-
-78 tests covering the GeoJSON layer, area computation, the domain models, and the
-assessment logic including the low-confidence and no-data paths.
-
----
-
-## Project structure
-
-```
-app/
-  Console/Commands/ComputeAreaCommand.php       land area computation
-  Console/Commands/ComputeBenchmarkCommand.php   national reference rates
-  Http/Controllers/LocationController.php       map, drill-down and assessment
-  Models/                                       Province, Municipality, Barangay,
-                                                PopulationFigure, Facility, Laboratory,
-                                                FacilityTest, Benchmark
-  Support/GeoJson.php                           FeatureCollection builder
-  Support/Geometry/PolygonArea.php              spherical polygon area
-  Support/Assessment/                           indicator definitions and assessor
-database/migrations/                            schema only — no domain tables
-resources/js/components/service-area-map.tsx    Leaflet map (lazy-loaded)
-resources/js/pages/location-map.tsx             map page
-resources/js/pages/location-assessment.tsx      assessment page
-tests/                                          Feature and Unit
-```
-
-## DB
-
-use this link for DB backup
-
-    https://drive.google.com/drive/folders/1DeV1EEtjhX0eiyQcfD88kQ4VtfwfBkIV?usp=sharing  
+`AGENTS.md` and `WEBSITE_README.md` predate the current version and are partly out of date.

@@ -2,9 +2,9 @@
 
 namespace App\Support\Assessment;
 
+use App\Support\Ai\ResponsesClient;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -16,21 +16,24 @@ class AssessmentAiService
 {
     public const SECTORS = GapAssessmentDiagnostics::SECTORS;
 
+    public function __construct(private readonly ResponsesClient $client) {}
+
     public function analyze(array $report): array
     {
-        if (blank(config('services.openai.api_key'))) {
-            return $this->unavailable('AI analysis is not configured. Computed assessment results remain available.');
+        if (! $this->client->configured()) {
+            return $this->unavailable($this->client->missingConfigurationMessage('AI analysis').' Computed assessment results remain available.');
         }
 
         $evidence = $this->evidence($report);
-        $model = (string) config('services.openai.model', 'gpt-4.1-mini');
-        $key = 'assessment-ai:v4:'.hash('sha256', $model.json_encode($evidence, JSON_THROW_ON_ERROR));
+        $model = $this->client->model();
+        // The provider is part of the key: the same model name on another gateway is a different analysis.
+        $key = 'assessment-ai:v4:'.hash('sha256', $this->client->provider().$model.json_encode($evidence, JSON_THROW_ON_ERROR));
         $cache = Cache::store('file');
         if ($cached = $cache->get($key)) {
             return $cached;
         }
 
-        $lock = $cache->lock($key.':lock', max(90, (int) config('services.openai.timeout', 60) + 15));
+        $lock = $cache->lock($key.':lock', max(90, $this->client->timeout() + 15));
         if (! $lock->get()) {
             return $this->unavailable('AI analysis is already being prepared. Please retry shortly.');
         }
@@ -38,31 +41,31 @@ class AssessmentAiService
         try {
             $payload = [
                 'model' => $model,
-                'store' => false,
                 'max_output_tokens' => 6000,
                 'instructions' => $this->instructions(),
                 'input' => json_encode($evidence, JSON_THROW_ON_ERROR),
+                // Strict schema output is non-streaming on GATES, which is how it is used here.
                 'text' => ['format' => [
                     'type' => 'json_schema', 'name' => 'location_assessment_analysis',
                     'strict' => true, 'schema' => $this->schema($evidence),
                 ]],
             ];
-            // These tabs explain already-computed results; default GPT-5 reasoning can exhaust the HTTP budget.
-            if (str_starts_with($model, 'gpt-5') && ! str_contains($model, 'chat') && ! str_contains($model, 'pro')) {
-                $payload['reasoning'] = ['effort' => 'low'];
-                $payload['text']['verbosity'] = 'low';
+            // These tabs explain already-computed results; a default reasoning budget can exhaust the HTTP time limit.
+            if ($effort = $this->client->explanationReasoningEffort()) {
+                $payload['reasoning'] = ['effort' => $effort];
+                // Verbosity is an OpenAI GPT-5 option; GATES documents only the reasoning effort.
+                if (! $this->client->isGates()) {
+                    $payload['text']['verbosity'] = 'low';
+                }
             }
-            $response = Http::withToken(config('services.openai.api_key'))
-                ->withOptions(['verify' => config('services.openai.ca_bundle') ?: true])
-                ->acceptJson()->connectTimeout(10)->timeout(config('services.openai.timeout', 60))
-                ->post('https://api.openai.com/v1/responses', $payload);
+            $response = $this->client->create($payload);
 
             if (! $response->successful()) {
-                return $this->failure('provider_http', match ($response->status()) {
+                return $this->failure('provider_http', $this->client->gatesFailureMessage($response) ?? match ($response->status()) {
                     401, 403 => 'The AI service could not authenticate. Check the server OpenAI configuration.',
                     429 => 'The AI service has reached its usage limit. Please retry later.',
                     default => 'The AI service is temporarily unavailable. Please retry.',
-                }, ['http_status' => $response->status()]);
+                }, array_filter(['http_status' => $response->status(), 'code' => $this->client->errorCode($response)], fn ($value) => $value !== null));
             }
             if ($response->json('status') !== 'completed') {
                 return $this->failure('incomplete_response', 'The AI analysis was incomplete. Please retry.');

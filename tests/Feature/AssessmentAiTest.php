@@ -54,6 +54,38 @@ class AssessmentAiTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_the_gates_gateway_serves_the_structured_analysis(): void
+    {
+        config([
+            'services.ai.provider' => 'gates', 'services.gates.api_key' => 'gates_test_key',
+            'services.gates.base_url' => 'https://gates.test/v1/', 'services.gates.model' => 'openai.gpt-6-luna',
+            'services.gates.reasoning_effort' => 'low',
+        ]);
+        Http::fake(['gates.test/v1/responses' => Http::response($this->response())]);
+        $result = app(AssessmentAiService::class)->analyze($this->report());
+        $this->assertSame('ready', $result['status']);
+        $this->assertSame('openai.gpt-6-luna', $result['model']);
+        Http::assertSent(fn ($request) => $request->url() === 'https://gates.test/v1/responses'
+            && $request->hasHeader('Authorization', 'Bearer gates_test_key')
+            && preg_match('/^[0-9a-f]{32}$/', $request->header('X-Request-ID')[0] ?? '') === 1
+            && $request['model'] === 'openai.gpt-6-luna' && $request['max_output_tokens'] === 6000
+            && $request['reasoning']['effort'] === 'low' && ! isset($request['text']['verbosity'])
+            && ! isset($request['store']) && $request['text']['format']['strict'] === true);
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.openai.com'));
+    }
+
+    public function test_gateway_error_codes_become_specific_messages_without_provider_text(): void
+    {
+        config(['services.ai.provider' => 'gates', 'services.gates.api_key' => 'gates_test_key', 'services.gates.base_url' => 'https://gates.test']);
+        Http::fake(['gates.test/v1/responses' => Http::response(['error' => [
+            'code' => 'budget_exhausted', 'message' => 'gates_test_key private detail', 'correlation_id' => 'abc',
+        ]], 402)]);
+        $result = app(AssessmentAiService::class)->analyze($this->report());
+        $this->assertSame('unavailable', $result['status']);
+        $this->assertStringContainsString('no credit available', $result['message']);
+        $this->assertStringNotContainsString('gates_test_key', json_encode($result));
+    }
+
     public function test_gpt5_explanations_use_a_small_reasoning_budget_and_grounded_reference_schema(): void
     {
         config(['services.openai.model' => 'gpt-5']);

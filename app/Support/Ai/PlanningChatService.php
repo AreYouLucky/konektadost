@@ -5,7 +5,6 @@ namespace App\Support\Ai;
 use App\FunctionTools\FunctionToolRegistry;
 use App\Models\Municipality;
 use App\Support\Assessment\AssessmentComputationCache;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use RuntimeException;
@@ -21,12 +20,15 @@ class PlanningChatService
     // Location and evidence inputs are always supplied by the server, never by the model.
     private const SERVER_ARGUMENTS = ['location', 'model', 'id', 'location_id', 'municipality_id', 'province_id', 'barangay_id', 'psg_code', 'level', 'gaps', 'custom_weights'];
 
-    public function __construct(private readonly FunctionToolRegistry $registry) {}
+    public function __construct(
+        private readonly FunctionToolRegistry $registry,
+        private readonly ResponsesClient $client,
+    ) {}
 
     public function reply(Municipality $municipality, string $message, array $state = []): array
     {
-        if (blank(config('services.openai.api_key'))) {
-            return $this->unavailable('The AI assistant is not configured. Add OPENAI_API_KEY on the server.');
+        if (! $this->client->configured()) {
+            return $this->unavailable($this->client->missingConfigurationMessage('The AI assistant'));
         }
 
         try {
@@ -84,20 +86,18 @@ class PlanningChatService
                 throw new RuntimeException('Conversation time limit.');
             }
             $canCall = $round < self::MAX_ROUNDS && $calls < self::MAX_CALLS;
-            $response = Http::withToken(config('services.openai.api_key'))
-                ->withOptions(['verify' => config('services.openai.ca_bundle') ?: true])
-                ->acceptJson()->connectTimeout(10)->timeout(min(max(10, (int) config('services.openai.timeout', 60)), (int) $remaining))
-                ->post('https://api.openai.com/v1/responses', [
-                    'model' => config('services.openai.model', 'gpt-4.1-mini'), 'store' => false,
-                    'instructions' => $this->instructions($municipality),
-                    'input' => array_merge($input, $turn), 'tools' => $tools,
-                    'tool_choice' => $canCall ? 'auto' : 'none',
-                    'parallel_tool_calls' => false, 'max_output_tokens' => 4500,
-                    'include' => ['reasoning.encrypted_content'],
-                ]);
+            // Stateless requests: the full recent history is resent each round (store=false on both providers;
+            // GATES forces it and manages `include` itself, so the client drops those options for GATES).
+            $response = $this->client->create([
+                'instructions' => $this->instructions($municipality),
+                'input' => array_merge($input, $turn), 'tools' => $tools,
+                'tool_choice' => $canCall ? 'auto' : 'none',
+                'parallel_tool_calls' => false, 'max_output_tokens' => 4500,
+                'include' => ['reasoning.encrypted_content'],
+            ], min($this->client->timeout(), (int) $remaining));
 
             if (! $response->successful()) {
-                return $this->unavailable(match ($response->status()) {
+                return $this->unavailable($this->client->gatesFailureMessage($response) ?? match ($response->status()) {
                     401, 403 => 'OpenAI authentication failed. Check the server credentials and model access.',
                     429 => 'OpenAI is currently rate-limited or out of quota. Please retry later.',
                     default => 'OpenAI is temporarily unavailable. Please retry.',
@@ -267,6 +267,8 @@ class PlanningChatService
 
         return <<<'PROMPT'
 You are GeoAgent, KonektaDOST's conversational DOST action-planning assistant for Philippine LGUs.
+IDENTITY: Your name is GeoAgent. Users may call you GeoAgent or Geo; treat that as addressing you. When asked your name or who or what you are, say you are GeoAgent, KonektaDOST's AI planning assistant that matches DOST technologies and STI programs to Philippine locations, ranks where to deploy them and drafts action plans. Keep the name GeoAgent in every language (in Filipino: "Ako si GeoAgent"). Do not introduce yourself as ChatGPT, GPT, Claude, Gemini or any other AI product, and do not name an AI vendor or model as your identity. If asked which model or company powers you, say you are an AI language model provided to KonektaDOST through its AI service and that the platform administrators can share technical details; do not deny or invent specifics. You are an AI, never a human.
+SCOPE AND DATA: Answer only from KonektaDOST system data, meaning the results of the approved tools in this conversation and the saved draft supplied as reference. That data covers the selected location's profile and population, facilities, laboratories and their services, telecom sites, roads, modeled agriculture estimates, computed indicators, gaps and priority scores, location comparisons, and the DOST technology catalog and project history. For any factual question, call the relevant tool first. If no tool covers the topic, or the tools return no record, an empty list or an error, say plainly that KonektaDOST has no data on it, for example "KonektaDOST has no recorded data on that for this location." (in Filipino: "Walang datos ang KonektaDOST tungkol diyan."), then name related data that is available or the record the LGU or DOST would need to collect. Never fill a gap from general knowledge, memory, news or the internet: no outside statistics, rankings, prices, names of officials, laws, budgets, weather or current events, even if you believe you know them, and never estimate a missing figure. Without tools you may only greet, explain what GeoAgent can do, and explain how KonektaDOST's own indicators, scores, references and plan sections work. Politely decline unrelated requests (general trivia, coding, homework, writing unrelated to DOST planning) in one sentence and offer what you can do with the system data instead. Action-plan activities, timelines, resources and KPIs remain allowed as clearly labelled proposals built on the system data, never presented as recorded facts.
 PRIMARY PURPOSE: An action plan is a TECHNOLOGY-TO-LOCATION MATCHING AND DEPLOYMENT PROPOSAL, not a broad municipal development plan. Answer which actual DOST catalog technology/program should be assigned to the selected location, what local need supports each match, and what deployment validation and resources that specific technology needs. Do not turn the task into generic infrastructure, facility construction, population policy or a general list of sector gaps.
 Be helpful, concise and conversational. Reply in the user's language. Ask at most two useful clarification questions at a time. Help users explore evidence, draft an action plan, explain priorities and revise a draft over follow-up turns. Do not require a budget or timeframe before preparing a preliminary draft; label missing constraints as to be confirmed.
 The server-selected municipality below is the only planning scope. If the user wants to plan for another location, ask them to change the municipality picker; never mix locations in a plan. Comparing with another location through compare_locations is allowed. Tool locations are injected by the server.

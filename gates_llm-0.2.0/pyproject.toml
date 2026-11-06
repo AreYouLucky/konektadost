@@ -1,0 +1,31 @@
+[project]
+name = "gates-llm"
+version = "0.2.0"
+description = "Typed Python SDK for GATES LLM Suite"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "httpx>=0.28.1",
+  "pydantic>=2.11.9",
+  "typing-extensions>=4.12.2",
+]
+license = { text = "Proprietary" }
+
+[project.optional-dependencies]
+files = [
+  "pypdfium2>=4.30,<6",
+  "Pillow>=11,<13",
+  "python-docx>=1.2,<2",
+  "openpyxl>=3.1.5,<4",
+  "defusedxml>=0.7.1,<1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gates_llm"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/gates_llm", "README.md", "pyproject.toml"]

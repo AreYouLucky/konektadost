@@ -282,6 +282,59 @@ class PlanningChatTest extends TestCase
         $this->postMessage('Hello')->assertOk()->assertJsonCount(2, 'messages');
     }
 
+    public function test_the_gates_gateway_runs_tool_rounds_with_fresh_request_ids(): void
+    {
+        $this->signIn();
+        config([
+            'services.ai.provider' => 'gates', 'services.gates.api_key' => 'gates_test_key',
+            'services.gates.base_url' => 'https://gates.test', 'services.gates.model' => 'openai.gpt-6-luna',
+        ]);
+        Http::fake(['gates.test/v1/responses' => Http::sequence()
+            ->push($this->tool('analyze_health_access'))
+            ->push($this->text('Population evidence reviewed.'))]);
+        $this->postMessage('What is the population?')->assertOk()->assertJsonPath('configured', true)
+            ->assertJsonPath('messages.1.content', 'Population evidence reviewed.');
+
+        $sent = Http::recorded()->map(fn ($pair) => $pair[0]);
+        $this->assertCount(2, $sent);
+        $ids = $sent->map(fn ($request) => $request->header('X-Request-ID')[0] ?? null)->all();
+        $this->assertCount(2, array_unique(array_filter($ids)), 'Each generation needs its own X-Request-ID.');
+        foreach ($sent as $request) {
+            $this->assertSame('https://gates.test/v1/responses', $request->url());
+            $this->assertTrue($request->hasHeader('Authorization', 'Bearer gates_test_key'));
+            $this->assertSame('openai.gpt-6-luna', $request['model']);
+            // GATES forces store=false and manages reasoning state itself.
+            $this->assertArrayNotHasKey('store', $request->data());
+            $this->assertArrayNotHasKey('include', $request->data());
+            $this->assertSame(4500, $request['max_output_tokens']);
+        }
+        // The second round resends the tool call and its output, statelessly.
+        $this->assertSame('function_call_output', collect($sent[1]['input'])->last()['type']);
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.openai.com'));
+    }
+
+    public function test_every_request_sets_the_geoagent_identity_and_system_data_scope(): void
+    {
+        $this->signIn();
+        Http::fake(['api.openai.com/v1/responses' => Http::response($this->text('Ako si GeoAgent.'))]);
+        $this->postMessage('Anong pangalan mo?')->assertOk()->assertJsonPath('messages.1.content', 'Ako si GeoAgent.');
+        Http::assertSent(fn ($request) => str_starts_with($request['instructions'], 'You are GeoAgent')
+            && str_contains($request['instructions'], 'Your name is GeoAgent')
+            && str_contains($request['instructions'], 'Do not introduce yourself as ChatGPT')
+            && str_contains($request['instructions'], 'Answer only from KonektaDOST system data')
+            && str_contains($request['instructions'], 'say plainly that KonektaDOST has no data on it')
+            && str_contains($request['instructions'], 'Never fill a gap from general knowledge'));
+    }
+
+    public function test_gates_without_a_base_url_is_reported_as_not_configured(): void
+    {
+        $this->signIn();
+        config(['services.ai.provider' => 'gates', 'services.gates.api_key' => 'gates_test_key', 'services.gates.base_url' => null]);
+        $this->postMessage('Hello')->assertStatus(503)->assertJsonPath('status', 'unavailable')
+            ->assertJsonPath('message', 'The AI assistant is not configured. Add GATES_API_KEY and GATES_BASE_URL on the server.');
+        Http::assertNothingSent();
+    }
+
     public function test_concurrent_messages_and_resets_are_rejected_while_reply_is_pending(): void
     {
         $this->signIn();
@@ -336,7 +389,7 @@ class PlanningChatTest extends TestCase
     public function test_openai_tool_schemas_exclude_server_only_arguments(): void
     {
         $definitions = app(PlanningChatService::class)->definitions();
-        $this->assertCount(29, $definitions);
+        $this->assertCount(30, $definitions);
         foreach ($definitions as $definition) {
             $this->assertSame('function', $definition['type']);
             $this->assertFalse($definition['parameters']['additionalProperties']);

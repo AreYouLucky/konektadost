@@ -675,10 +675,7 @@ function PlanningChatWindow({
                         )}
                     </div>
 
-                    <nav
-                        aria-label="Planning assistant views"
-                        className="flex shrink-0 gap-1 border-b border-slate-100 px-3 py-2 dark:border-slate-800"
-                    >
+                    <nav aria-label="GeoAgent views" className="flex shrink-0 gap-1 border-b border-slate-100 px-3 py-2 dark:border-slate-800">
                         {(
                             [
                                 { key: 'chat', label: 'Chat', icon: MessageCircle },
@@ -707,7 +704,7 @@ function PlanningChatWindow({
                         ref={scrollArea}
                         className="min-h-0 flex-1 overflow-y-auto bg-slate-50/70 px-4 py-4 dark:bg-slate-900/40"
                         role={view === 'chat' ? 'log' : 'region'}
-                        aria-label={view === 'chat' ? 'Conversation with planning assistant' : 'Saved planning history'}
+                        aria-label={view === 'chat' ? 'Conversation with GeoAgent' : 'Saved planning history'}
                         aria-live={view === 'chat' ? 'polite' : 'off'}
                         aria-relevant="additions text"
                         aria-busy={busy || loading}
@@ -743,7 +740,8 @@ function PlanningChatWindow({
                                         ? `Which technology or local need should we explore for ${location.name}?`
                                         : 'Choose a municipality above to get started.'}
                                     <p className="mt-2 text-[11px] text-slate-500">
-                                        I use your assessment tools. Plans are drafts for LGU/DOST review, not approved projects.
+                                        I answer only from KonektaDOST's recorded data and tell you when something isn't recorded. Plans are drafts
+                                        for LGU/DOST review, not approved projects.
                                     </p>
                                 </div>
                                 {loading && (
@@ -850,7 +848,7 @@ function PlanningChatWindow({
                         )}
                         {!configured && (
                             <p role="alert" className="mb-2 px-1 text-xs text-amber-700 dark:text-amber-300">
-                                OpenAI is not configured on the server. Computed assessments remain available.
+                                The AI assistant is not configured on the server. Computed assessments remain available.
                             </p>
                         )}
                         {error && (
@@ -908,7 +906,7 @@ function PlanningChatWindow({
                         >
                             <textarea
                                 ref={composer}
-                                aria-label="Message the planning assistant"
+                                aria-label="Message GeoAgent"
                                 value={draft}
                                 onChange={(event) => setDraft(event.target.value)}
                                 onKeyDown={(event) => {

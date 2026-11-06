@@ -231,7 +231,7 @@ class PlanningChatHistory
         $id = DB::table('planning_action_plans')->insertGetId([
             'conversation_id' => $conversation->id, 'message_id' => $messageId, 'version' => $version,
             'title' => $this->planTitle($content, $municipality), 'status' => 'draft_pending_human_validation',
-            'content' => $content, 'evidence_snapshot' => $this->encode($evidence), 'model' => config('services.openai.model'),
+            'content' => $content, 'evidence_snapshot' => $this->encode($evidence), 'model' => app(ResponsesClient::class)->model(),
             'visuals' => $this->encode($visuals),
             'created_at' => now(), 'updated_at' => now(),
         ]);

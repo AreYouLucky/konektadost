@@ -76,15 +76,15 @@ class RelinkResourceLocations extends Command
             return self::SUCCESS;
         }
         if ($legacy = $this->legacyForeignKeys()) {
-            $this->components->error('These constraints still point at the legacy GADM tables and block the update: '.implode(', ', $legacy)
-                .'. Run: php artisan migrate --path=database/migrations/2026_11_06_000200_drop_legacy_resource_location_foreign_keys.php');
+            $this->components->error('These constraints still point at the legacy GADM tables and block the update: ' . implode(', ', $legacy)
+                . '. Run: php artisan migrate --path=database/migrations/2026_11_06_000200_drop_legacy_resource_location_foreign_keys.php');
 
             return self::FAILURE;
         }
 
         DB::transaction(function () use ($plans) {
             foreach ($plans as $table => $rows) {
-                $this->writeLinks($table, array_filter($rows, fn ($row) => $this->changed($row)), 'mun', 'brgy');
+                $this->writeLinks($table, array_filter($rows, fn($row) => $this->changed($row)), 'mun', 'brgy');
             }
         });
         app(ReadCache::class)->invalidate('domain');
@@ -107,8 +107,11 @@ class RelinkResourceLocations extends Command
                 'id' => (int) $record->id,
                 'old_mun' => $record->municipality_id === null ? null : (int) $record->municipality_id,
                 'old_brgy' => $record->barangay_id === null ? null : (int) $record->barangay_id,
-                'mun' => null, 'brgy' => null, 'point' => $this->point($record->longitude, $record->latitude),
-                'candidates' => [], 'evidence' => 'no_coordinates',
+                'mun' => null,
+                'brgy' => null,
+                'point' => $this->point($record->longitude, $record->latitude),
+                'candidates' => [],
+                'evidence' => 'no_coordinates',
             ];
             $code = $hasPsgc ? trim((string) $record->barangay_psgc) : '';
 
@@ -150,7 +153,7 @@ class RelinkResourceLocations extends Command
         }
         $claims = array_count_values($map);
 
-        return array_filter($map, fn ($new) => $claims[$new] === 1);
+        return array_filter($map, fn($new) => $claims[$new] === 1);
     }
 
     private function applyIdMap(array &$rows, array $idMap): void
@@ -194,8 +197,10 @@ class RelinkResourceLocations extends Command
         [$lng, $lat] = $point;
         $hits = [];
         foreach ($areas as $id => [$geometry, $bounds]) {
-            if ($bounds !== null && $lng >= $bounds[0] && $lng <= $bounds[2] && $lat >= $bounds[1] && $lat <= $bounds[3]
-                && PointInPolygon::contains($geometry, $lng, $lat)) {
+            if (
+                $bounds !== null && $lng >= $bounds[0] && $lng <= $bounds[2] && $lat >= $bounds[1] && $lat <= $bounds[3]
+                && PointInPolygon::contains($geometry, $lng, $lat)
+            ) {
                 $hits[] = $id;
             }
         }
@@ -256,16 +261,17 @@ class RelinkResourceLocations extends Command
                 $evidence[$key][$table] = $count;
             }
             $summary[] = [
-                $table, count($rows),
-                count(array_filter($rows, fn ($row) => ! $this->changed($row))),
-                count(array_filter($rows, fn ($row) => $row['mun'] !== $row['old_mun'])),
-                count(array_filter($rows, fn ($row) => $row['brgy'] !== $row['old_brgy'])),
-                count(array_filter($rows, fn ($row) => $row['mun'] === null)),
+                $table,
+                count($rows),
+                count(array_filter($rows, fn($row) => ! $this->changed($row))),
+                count(array_filter($rows, fn($row) => $row['mun'] !== $row['old_mun'])),
+                count(array_filter($rows, fn($row) => $row['brgy'] !== $row['old_brgy'])),
+                count(array_filter($rows, fn($row) => $row['mun'] === null)),
             ];
         }
         $this->table(['Table', 'Rows', 'Unchanged', 'Municipality fixed', 'Barangay changed', 'No municipality'], $summary);
         $this->table(['Evidence', ...array_keys($plans)], array_map(
-            fn ($key) => [$key, ...array_map(fn ($table) => $evidence[$key][$table] ?? 0, array_keys($plans))],
+            fn($key) => [$key, ...array_map(fn($table) => $evidence[$key][$table] ?? 0, array_keys($plans))],
             array_keys($evidence),
         ));
 
@@ -274,7 +280,7 @@ class RelinkResourceLocations extends Command
         arsort($after);
         $names = DB::table('municipalities')->whereIn('id', array_slice(array_keys($after), 0, 10))->pluck('name', 'id');
         $this->table(['Municipality (most facilities)', 'Facilities now linked', 'After relink'], array_map(
-            fn ($id) => [$names[$id] ?? "#{$id}", $before[$id] ?? 0, $after[$id]],
+            fn($id) => [$names[$id] ?? "#{$id}", $before[$id] ?? 0, $after[$id]],
             array_slice(array_keys($after), 0, 10),
         ));
     }
@@ -285,7 +291,7 @@ class RelinkResourceLocations extends Command
         if (! is_dir($directory)) {
             mkdir($directory, 0775, true);
         }
-        $path = $directory.'/resource-relink-'.now()->format('Ymd-His').'.csv';
+        $path = $directory . '/resource-relink-' . now()->format('Ymd-His') . '.csv';
         $file = fopen($path, 'w');
         fputcsv($file, ['table', 'id', 'old_municipality_id', 'old_barangay_id', 'new_municipality_id', 'new_barangay_id', 'evidence'], ',', '"', '');
         foreach ($plans as $table => $rows) {
@@ -320,7 +326,7 @@ class RelinkResourceLocations extends Command
             }
         });
         app(ReadCache::class)->invalidate('domain');
-        $this->components->info('Original links restored from '.$path);
+        $this->components->info('Original links restored from ' . $path);
 
         return self::SUCCESS;
     }
@@ -329,10 +335,10 @@ class RelinkResourceLocations extends Command
     {
         $groups = [];
         foreach ($rows as $row) {
-            $groups[($row[$municipalityKey] ?? 'null').'|'.($row[$barangayKey] ?? 'null')][] = $row['id'];
+            $groups[($row[$municipalityKey] ?? 'null') . '|' . ($row[$barangayKey] ?? 'null')][] = $row['id'];
         }
         foreach ($groups as $key => $ids) {
-            [$municipality, $barangay] = array_map(fn ($value) => $value === 'null' ? null : (int) $value, explode('|', $key));
+            [$municipality, $barangay] = array_map(fn($value) => $value === 'null' ? null : (int) $value, explode('|', $key));
             foreach (array_chunk($ids, 1000) as $chunk) {
                 DB::table($table)->whereIn('id', $chunk)->update(['municipality_id' => $municipality, 'barangay_id' => $barangay]);
             }

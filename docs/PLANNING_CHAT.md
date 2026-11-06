@@ -16,7 +16,18 @@ The assistant's **History** tab resumes previous conversations, and **Saved plan
 
 ## Configuration
 
-Uses the existing server-side `services.openai` configuration:
+All calls go through `App\Support\Ai\ResponsesClient`. The provider is the **GATES** gateway once `GATES_API_KEY` is set, otherwise **OpenAI**; `AI_PROVIDER=gates|openai` forces one.
+
+GATES (`services.gates`):
+
+- `GATES_API_KEY` (created in the GATES dashboard for the same environment as the gateway)
+- `GATES_BASE_URL` (gateway origin from the dashboard, without `/v1` or `/responses`)
+- `GATES_MODEL` (default `openai.gpt-6-luna`; must appear in model discovery and support function tools)
+- `GATES_TIMEOUT` (per-call timeout, default 60 seconds), `GATES_REASONING_EFFORT` (default `low`, used by the assessment explanations; empty disables it), `GATES_CA_BUNDLE` (optional, falls back to `OPENAI_CA_BUNDLE`)
+
+Check the setup with `php artisan ai:check` (free model discovery). `php artisan ai:check --tools` runs one tiny paid tool round trip shaped like a GeoAgent turn.
+
+OpenAI fallback (`services.openai`):
 
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL` (default `gpt-4.1-mini`; must support Responses API function calling)
@@ -55,7 +66,7 @@ Surviving chats from the earlier file-cache version are imported once when that 
 ## Architecture and safeguards
 
 - `PlanningChatController` authenticates/validates requests, resolves municipalities, and coordinates conversation history and locks.
-- `PlanningChatService` calls the OpenAI Responses API and dispatches approved functions through the existing `FunctionToolRegistry` (Layers A–F).
+- `PlanningChatService` calls the configured Responses API (GATES or OpenAI) and dispatches approved functions through the existing `FunctionToolRegistry` (Layers A–F).
 - `planning-action-plan.tsx` provides the shared large viewer for generated replies and saved versions. `planning-plan.ts` parses the six-column matrix and recorded source metadata; `planning-plan-pdf.ts` exports the selected snapshot using bundled fonts. Content is rendered as text and structured cells, without executing model-authored HTML or diagram code.
 - Tool schemas omit location overrides, model-supplied gaps and custom scoring weights. Laravel injects the selected municipality, validates argument types, and limits tool calls, history and evidence sizes.
 - `generate_action_plan` runs with `include_narrative=false` in chat, avoiding the legacy Gemini narrative call. No-match plans do not fabricate a deployment package or feasibility status.

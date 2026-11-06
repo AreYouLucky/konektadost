@@ -38,8 +38,12 @@ class PlanningConversationVisuals
             }
         }
         if ($items !== []) {
-            $visuals[] = $this->bar('DOST technology match scores', array_slice($items, 0, 6), $source,
-                'Deterministic relevance scores (0–100). These compare catalog matches, not approved assignments or guaranteed suitability. Lists may be excerpted.');
+            $visuals[] = $this->bar(
+                'DOST technology match scores',
+                array_slice($items, 0, 6),
+                $source,
+                'Deterministic relevance scores (0–100). These compare catalog matches, not approved assignments or guaranteed suitability. Lists may be excerpted.'
+            );
         }
         if ($plan !== null || $matches !== null) {
             $flows = [];
@@ -72,7 +76,9 @@ class PlanningConversationVisuals
                 ];
             }
             $visuals[] = [
-                'type' => 'assignment_diagram', 'title' => 'Technology-to-location assignment diagram', 'source_tool' => $source,
+                'type' => 'assignment_diagram',
+                'title' => 'Technology-to-location assignment diagram',
+                'source_tool' => $source,
                 'caption' => 'Arrows show proposed matching/deployment relationships, not approved projects. Exact host sites and technology-specific requirements need validation.',
                 'assignments' => $flows,
             ];
@@ -87,8 +93,12 @@ class PlanningConversationVisuals
             }
         }
         if ($items !== []) {
-            $visuals[] = $this->bar('Location screening priorities', $items, isset($results['calculate_priority_scores']) ? 'calculate_priority_scores' : 'generate_action_plan',
-                'General barangay priority scores, not technology-specific suitability. Do not assign a technology to a barangay from this ranking alone.');
+            $visuals[] = $this->bar(
+                'Location screening priorities',
+                $items,
+                isset($results['calculate_priority_scores']) ? 'calculate_priority_scores' : 'generate_action_plan',
+                'General barangay priority scores, not technology-specific suitability. Do not assign a technology to a barangay from this ranking alone.'
+            );
         }
 
         if (isset($results['compare_locations']['indicators'], $results['compare_locations']['locations'])) {
@@ -97,7 +107,8 @@ class PlanningConversationVisuals
             foreach ($comparison['indicators'] as $row) {
                 if (is_numeric($row['a'] ?? null) || is_numeric($row['b'] ?? null)) {
                     $rows[] = [
-                        'label' => (string) ($row['label'] ?? $row['key'] ?? 'Indicator'), 'unit' => (string) ($row['unit'] ?? ''),
+                        'label' => (string) ($row['label'] ?? $row['key'] ?? 'Indicator'),
+                        'unit' => (string) ($row['unit'] ?? ''),
                         'a' => is_numeric($row['a'] ?? null) ? (float) $row['a'] : null,
                         'b' => is_numeric($row['b'] ?? null) ? (float) $row['b'] : null,
                         'reference' => is_numeric($row['national_reference'] ?? null) ? (float) $row['national_reference'] : null,
@@ -107,7 +118,9 @@ class PlanningConversationVisuals
             }
             if ($rows !== []) {
                 $visuals[] = [
-                    'type' => 'comparison', 'title' => 'Location comparison', 'source_tool' => 'compare_locations',
+                    'type' => 'comparison',
+                    'title' => 'Location comparison',
+                    'source_tool' => 'compare_locations',
                     'locations' => [
                         'a' => (string) ($comparison['locations']['a']['name'] ?? $municipality->name),
                         'b' => (string) ($comparison['locations']['b']['name'] ?? 'Other location'),
@@ -141,7 +154,7 @@ class PlanningConversationVisuals
             }
             $prefix = 'Retained evidence from the previous saved plan; not recomputed for this reply. ';
             if (! str_starts_with($visual['caption'] ?? '', $prefix)) {
-                $visual['caption'] = $prefix.($visual['caption'] ?? '');
+                $visual['caption'] = $prefix . ($visual['caption'] ?? '');
             }
             $retained[] = $visual;
         }
@@ -154,33 +167,44 @@ class PlanningConversationVisuals
         $assignments = [];
         foreach ($matches['gap_interventions'] ?? [] as $gap) {
             foreach ($gap['matched_interventions'] ?? [] as $technology) {
-                if (! in_array($technology['source_catalog'] ?? null, ['dost_techs', 'technologies'], true)
+                if (
+                    ! in_array($technology['source_catalog'] ?? null, ['dost_techs', 'technologies'], true)
                     || empty($technology['intervention_id']) || empty($technology['name'])
-                    || in_array($technology['availability_status'] ?? '', ['unavailable', 'research_stage', 'historical_benchmark'], true)) {
+                    || in_array($technology['availability_status'] ?? '', ['unavailable', 'research_stage', 'historical_benchmark'], true)
+                ) {
                     continue;
                 }
-                $ref = $technology['source_catalog'].':'.($technology['intervention_id'] ?? '');
+                $ref = $technology['source_catalog'] . ':' . ($technology['intervention_id'] ?? '');
                 $score = $technology['relevance_score'] ?? null;
                 if (isset($assignments[$ref]) && ($assignments[$ref]['relevance_score'] ?? -1) >= ($score ?? -1)) {
                     continue;
                 }
                 $assignments[$ref] = [
-                    'catalog_ref' => $ref, 'technology' => $technology, 'relevance_score' => $score,
+                    'catalog_ref' => $ref,
+                    'technology' => $technology,
+                    'relevance_score' => $score,
                     'target_location' => ['name' => $municipality->name],
                     'matched_needs' => [['name' => $gap['gap_name'] ?? 'Recorded local need']],
                 ];
             }
         }
         $rows = array_values($assignments);
-        usort($rows, fn ($a, $b) => ($b['relevance_score'] ?? -1) <=> ($a['relevance_score'] ?? -1));
+        usort($rows, fn($a, $b) => ($b['relevance_score'] ?? -1) <=> ($a['relevance_score'] ?? -1));
 
         return $rows;
     }
 
     private function bar(string $title, array $items, string $source, string $caption): array
     {
-        return ['type' => 'bar', 'title' => $title, 'unit' => 'score / 100', 'maximum' => 100,
-            'items' => $items, 'source_tool' => $source, 'caption' => $caption];
+        return [
+            'type' => 'bar',
+            'title' => $title,
+            'unit' => 'score / 100',
+            'maximum' => 100,
+            'items' => $items,
+            'source_tool' => $source,
+            'caption' => $caption
+        ];
     }
 
     private function score(mixed $value): bool

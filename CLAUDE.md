@@ -1,6 +1,6 @@
 # KonektaDOST — Project Guide
 
-Snapshot of the system as scanned on 2026-11-05. Where this file and the older docs disagree, this file was checked against the code and the live database. `AGENTS.md`, `README.md` and `WEBSITE_README.md` are partly out of date (see §10).
+Snapshot of the system as scanned on 2026-11-05. Where this file and the older docs disagree, this file was checked against the code and the live database. `AGENTS.md` and `WEBSITE_README.md` are partly out of date (see §10). `README.md` was rewritten on 2026-11-06 (installation, running on other devices, structure, usage and user manual).
 
 ## 1. Goal
 
@@ -25,7 +25,7 @@ Core principle: **all numbers come from deterministic function tools. The AI onl
 - **Backend:** Laravel 12, PHP 8.2–8.5, Inertia v2, Ziggy (`route()` available in TSX), Pest 3.
 - **Frontend:** React 19 + TypeScript, Vite 6, Tailwind 4, Radix/shadcn-style UI in `resources/js/components/ui/`, lucide icons, MapLibre GL (intelligence map), Leaflet (service-area map), jsPDF (PDF exports with bundled Noto Sans).
 - **DB:** MySQL `konektadost`. Domain tables are **imported from a dump, not migrated**. Migrations only cover users/cache/jobs, a few additive tables and the planning-chat tables.
-- **AI:** OpenAI Responses API (`services.openai`, default `gpt-4.1-mini`, key `OPENAI_API_KEY`). There is also a legacy Gemini narrative path (`AiNarrativeService`, `services.gemini`) that chat skips.
+- **AI:** a Responses API reached only through `Support/Ai/ResponsesClient`. Provider `services.ai.provider` (`AI_PROVIDER`) is **GATES** (LLM gateway, `services.gates`: `GATES_API_KEY`, `GATES_BASE_URL` = gateway origin without `/v1`, `GATES_MODEL` default `openai.gpt-6-luna`) once `GATES_API_KEY` is set, otherwise **OpenAI** (`services.openai`, `OPENAI_API_KEY`, `OPENAI_MODEL`). GATES contract (SDK reference in `gates_llm-0.2.0/`): `POST {base}/v1/responses`, a fresh `X-Request-ID` per generation (reuse → 409 `duplicate_request`), positive `max_output_tokens` (credit is reserved from it), 2 MB body limit, `store`/`include`/stored-response options dropped. `php artisan ai:check` verifies URL, key and model for free; `--generate` / `--tools` run tiny paid checks. `phpunit.xml` pins `AI_PROVIDER=openai` so tests never reach the gateway. There is also a legacy Gemini narrative path (`AiNarrativeService`, `services.gemini`) that chat skips.
 
 ```bash
 composer dev                    # serve + queue + vite
@@ -134,9 +134,9 @@ The user layout is `layouts/app/app-sidebar-layout.tsx` with `components/app-sid
 
 ## 6. AI layer (implemented)
 
-- **Planning chat** (`PlanningChatService`): uses the OpenAI Responses API with function calling over **all 30 registry tools** (incl. `compare_locations`, rendered as a `comparison` visual). Location arguments (`municipality_id`, `psg_code`, `gaps`, `custom_weights`, …) are stripped from the schemas and injected by the server. Limits: max 5 rounds and 12 calls, a 150 s budget, `store=false`, and the last 4 turns plus the latest saved draft as context. A reply that contains all 5 numbered headings is auto-saved as a new plan version (`PlanningChatHistory::isActionPlan`). The system prompt in `instructions()` focuses plans on **technology-to-location assignments**.
+- **Planning chat** (`PlanningChatService`): uses the configured Responses API (GATES or OpenAI) with function calling over **all 30 registry tools** (incl. `compare_locations`, rendered as a `comparison` visual). Location arguments (`municipality_id`, `psg_code`, `gaps`, `custom_weights`, …) are stripped from the schemas and injected by the server. Limits: max 5 rounds and 12 calls, a 150 s budget, `store=false`, and the last 4 turns plus the latest saved draft as context. A reply that contains all 5 numbered headings is auto-saved as a new plan version (`PlanningChatHistory::isActionPlan`). The system prompt in `instructions()` focuses plans on **technology-to-location assignments**.
 - **Assessment interpretation** (`AssessmentAiService`): a structured-schema OpenAI call over compact assessment evidence. It is validated and cached per evidence hash, with a lock against duplicate calls.
-- Without `OPENAI_API_KEY`, both return an `unavailable` status. The deterministic pages still work.
+- Without a configured provider (GATES key + base URL, or `OPENAI_API_KEY`), both return an `unavailable` status. The deterministic pages still work. GATES error codes (`budget_exhausted`, `model_not_allowed`, `rate_limit_exceeded`, `request_too_large`, …) map to specific messages in `ResponsesClient::gatesFailureMessage`; failures log only status, code and request ID.
 
 ## 7. Conventions and gotchas
 
@@ -168,12 +168,10 @@ The user layout is `layouts/app/app-sidebar-layout.tsx` with `components/app-sid
 5. **Replace the E/F fixed heuristics** (12% beneficiaries, 25k fallback, 50% unpaved) with data-driven values or explicit "not estimated" states.
 6. **Comparison view.** Compare two or three municipalities, or two technologies for one location, side by side.
 7. **Fix the test DB.** Give the planning migration a guard, or create `municipalities` in the test setup, so that `RefreshDatabase` tests run again.
-8. **Refresh the stale docs.** `AGENTS.md` (14 tools → 29; agriculture rows 10,452 → 9,632; `roads` missing) and `README.md` (`gadm_id`, `facility_tests`, `benchmarks:compute`, and the "Not built" status table are outdated).
+8. **Refresh the stale docs.** `AGENTS.md` (14 tools → 29; agriculture rows 10,452 → 9,632; `roads` missing).
 
 ## 10. Known doc drift
 
-- README says the join key is `gadm_id` and lists `facility_tests` and `benchmarks:compute`. The current code uses `psg_code` and FKs, `lab_services`, and dynamic benchmarks.
-- README's status table says the interventions, AI narrative and export are "Not built". All three now exist.
 - AGENTS.md says the AI layer is "Next". It is implemented (planning chat and assessment AI).
 - The admin dashboard text references `benchmarks:compute`, which no longer applies.
 
