@@ -1,0 +1,49 @@
+# Keep the image small and free of secrets. Dependencies and frontend assets are built inside Docker.
+
+# Secrets and local configuration (the container gets its settings from docker-compose / .env at run time)
+.env
+.env.*
+!.env.example
+auth.json
+
+# Built inside the image
+vendor/
+node_modules/
+public/build/
+# Created by `npm run dev`; inside the image it would point pages at a Vite server that does not exist
+public/hot
+
+# Runtime data: recreated empty by the start-up script
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/app/*
+storage/pail
+bootstrap/cache/*.php
+
+# Database dumps (imported by the database container, never baked into the app image)
+docker/mysql-init/
+*.sql.gz
+konektadost*.sql
+
+# Not needed at run time
+.git/
+.github/
+.gitlab-ci.yml
+.vscode/
+.idea/
+.fleet/
+.zed/
+.claude/
+tests/
+.phpunit.cache/
+.phpunit.result.cache
+coverage/
+npm-debug.log
+yarn-error.log
+# GATES Python SDK: reference only; the app calls the gateway's HTTP API directly
+gates_llm-0.2.0/
+Dockerfile
+docker-compose.yml
+.dockerignore

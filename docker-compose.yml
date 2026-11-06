@@ -1,20 +1,77 @@
-services:
-  laravel:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "8081:80"
-    depends_on:
-      - mysql
+# KonektaDOST with Docker: the web app (PHP 8.4 + Apache) and its MariaDB database.
+#
+# First start:
+#   1. Put the database dump in docker/mysql-init/ (e.g. docker/mysql-init/konektadost.sql).
+#   2. Make sure .env has APP_KEY and, for the AI, GATES_API_KEY / GATES_BASE_URL.
+#   3. docker compose up -d --build      then open http://localhost:8081
+# The dump is imported only when the database volume is new. To re-import: docker compose down -v
+#
+# Settings below override the matching .env values inside the containers (database host,
+# credentials, URL), so the same .env keeps working for XAMPP outside Docker.
 
-  mysql:
-    image: mysql:8.0
+services:
+  app:
+    build: .
+    # Local builds are tagged konektadost-app. To run the image CI pushed to the registry instead, set
+    # KONEKTADOST_IMAGE=<registry>/<project>/konektadost:latest in .env, then:
+    #   docker login <registry> && docker compose pull app && docker compose up -d --no-build
+    image: ${KONEKTADOST_IMAGE:-konektadost-app}
+    restart: unless-stopped
+    ports:
+      - "${DOCKER_APP_PORT:-8081}:80"
+    env_file:
+      - path: .env
+        required: false
     environment:
-      MYSQL_DATABASE: 'konektadost'
-      MYSQL_ROOT_PASSWORD: 'root_secret'
+      APP_URL: ${DOCKER_APP_URL:-http://localhost:8081}
+      APP_ENV: ${DOCKER_APP_ENV:-production}
+      APP_DEBUG: ${DOCKER_APP_DEBUG:-false}
+      LOG_CHANNEL: stderr
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_DATABASE: konektadost
+      DB_USERNAME: konektadost
+      DB_PASSWORD: ${DOCKER_DB_PASSWORD:-konektadost_secret}
+      # Local Windows certificate paths from .env do not exist in the container; the image's
+      # system certificates are used instead.
+      GATES_CA_BUNDLE: ""
+      OPENAI_CA_BUNDLE: ""
     volumes:
-      - mysql_data:/var/lib/mysql
+      - app_storage:/var/www/html/storage
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    # MariaDB, like XAMPP, so a dump exported there imports without changes.
+    image: mariadb:10.11
+    restart: unless-stopped
+    command:
+      - --max-allowed-packet=512M
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MARIADB_DATABASE: konektadost
+      MARIADB_USER: konektadost
+      MARIADB_PASSWORD: ${DOCKER_DB_PASSWORD:-konektadost_secret}
+      MARIADB_ROOT_PASSWORD: ${DOCKER_DB_ROOT_PASSWORD:-root_secret}
+    volumes:
+      - db_data:/var/lib/mysql
+      # *.sql / *.sql.gz files here are imported into konektadost on the first start only.
+      - ./docker/mysql-init:/docker-entrypoint-initdb.d:ro
+    ports:
+      # For database tools on this PC only (HeidiSQL, DBeaver): 127.0.0.1:3307.
+      - "127.0.0.1:${DOCKER_DB_PORT:-3307}:3306"
+    healthcheck:
+      # Passes only after the first-start import has finished.
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      # Importing a ~280 MB dump can take several minutes.
+      start_period: 20m
 
 volumes:
-  mysql_data:
+  db_data:
+  app_storage:

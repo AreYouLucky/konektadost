@@ -1,0 +1,32 @@
+# Build the KonektaDOST Docker image and push it to the Harbor registry.
+#
+# Set these in GitLab > Settings > CI/CD > Variables:
+#   REGISTRY             Harbor host, e.g. harbor.example.org
+#   IMAGE                full image path, e.g. harbor.example.org/<project>/konektadost
+#   HARBOR_ROBOT_NAME    robot account, e.g. robot$konektadost+ci
+#                        (turn OFF "Expand variable reference": the name contains "$")
+#   HARBOR_ROBOT_SECRET  robot account secret (masked and protected)
+#
+# The image never contains .env, API keys or the database. Servers pass those at run time
+# (README, "Docker").
+
+stages:
+  - build
+
+build-image:
+  stage: build
+  # Docker-in-Docker needs a privileged runner. With a shell runner or a runner that mounts the host's
+  # Docker socket, remove image, services and variables.
+  image: docker:29
+  services:
+    - docker:29-dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+  script:
+    - echo "$HARBOR_ROBOT_SECRET" | docker login "$REGISTRY" -u "$HARBOR_ROBOT_NAME" --password-stdin
+    - docker build -t "$IMAGE:$CI_COMMIT_SHORT_SHA" -t "$IMAGE:latest" .
+    - docker push "$IMAGE:$CI_COMMIT_SHORT_SHA"
+    - docker push "$IMAGE:latest"
+  rules:
+    # Build images from the default branch only (adjust to your own rules).
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

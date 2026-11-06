@@ -12,7 +12,7 @@ KonektaDOST answers one question: _for a selected province, city/municipality or
 
 All numbers come from deterministic analysis tools. The AI assistant, **GeoAgent**, only explains, orchestrates and drafts. Missing data is never treated as zero, and every recommendation is a draft until the LGU and DOST validate it.
 
-**Contents:** [Installation](#1-installation-guide) · [Running on another device](#17-running-on-another-device) · [Troubleshooting](#18-troubleshooting) · [Project structure](#2-project-structure) · [Project usage](#3-project-usage) · [User manual](#4-user-manual) · [More documentation](#5-more-documentation)
+**Contents:** [Installation](#1-installation-guide) · [Running on another device](#17-running-on-another-device) · [Troubleshooting](#18-troubleshooting) · [Docker](#19-run-with-docker) · [Project structure](#2-project-structure) · [Project usage](#3-project-usage) · [User manual](#4-user-manual) · [More documentation](#5-more-documentation)
 
 ---
 
@@ -230,6 +230,71 @@ There are two situations.
 | Data edited directly in MySQL does not appear           | Run `php artisan read-cache:clear`.                                                              |
 | "Your session has expired"                              | Refresh the page; sign in again if asked.                                                        |
 
+### 1.9 Run with Docker
+
+Docker is an alternative to XAMPP. It builds everything itself (PHP 8.4 with Apache, the Composer packages and the frontend) and runs its own MariaDB database. You need only Docker Desktop and the database dump.
+
+1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+2. Put the database dump in `docker/mysql-init/`, e.g. `docker/mysql-init/konektadost.sql` ([1.4](#14-set-up-the-database) explains how to get one). It is imported on the **first** start only.
+3. Make sure `.env` has `APP_KEY` (`php artisan key:generate --show` prints a new one) and the `GATES_*` settings. The containers read the rest of `.env`, but `docker-compose.yml` sets its own database host, credentials and URL, and ignores local certificate paths.
+4. Build and start:
+
+   ```bash
+   docker compose up -d --build
+   ```
+
+5. The first start imports the dump, which takes several minutes; follow it with `docker compose logs -f db`. The app starts once the import has finished. Open <http://localhost:8081>; from other devices use `http://<this-PC-ip>:8081`, and set `DOCKER_APP_URL` in `.env` to that address.
+
+| Task | Command |
+| --- | --- |
+| Start, or rebuild after code changes | `docker compose up -d --build` |
+| Stop | `docker compose down` |
+| Follow the app's logs | `docker compose logs -f app` |
+| Run an artisan command | `docker compose exec -u www-data app php artisan ai:check` |
+| Refresh computed data | `docker compose exec -u www-data app php artisan read-cache:clear` |
+| Re-import the database from scratch (deletes the Docker database) | `docker compose down -v`, then `docker compose up -d` |
+
+Always run artisan with `-u www-data`. Commands run as root create cache files the web server cannot write to later.
+
+Optional `.env` settings for Docker:
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `DOCKER_APP_PORT` | `8081` | Port the app is published on. |
+| `DOCKER_APP_URL` | `http://localhost:8081` | Address users open; set it to `http://<this-PC-ip>:8081` for other devices. |
+| `DOCKER_APP_DEBUG` | `false` | Show detailed error pages (testing only). |
+| `DOCKER_DB_PASSWORD` / `DOCKER_DB_ROOT_PASSWORD` | `konektadost_secret` / `root_secret` | Database passwords. Change them before the first start. |
+| `DOCKER_DB_PORT` | `3307` | Database port for tools on this PC only (`127.0.0.1`). |
+
+On start the container applies pending migrations only if the imported data is present. On an empty database it skips them, so a later import is not blocked.
+
+#### Registry (GitLab CI and Harbor)
+
+`.gitlab-ci.yml` builds the image on every push to the default branch and pushes it to Harbor as `$IMAGE:<commit>` and `$IMAGE:latest`. Set these in **GitLab › Settings › CI/CD › Variables**:
+
+| Variable | Example | Notes |
+| --- | --- | --- |
+| `REGISTRY` | `harbor.example.org` | Harbor host. |
+| `IMAGE` | `harbor.example.org/<project>/konektadost` | Full image path, without a tag. |
+| `HARBOR_ROBOT_NAME` | `robot$konektadost+ci` | Turn off **Expand variable reference**: the name contains `$`. |
+| `HARBOR_ROBOT_SECRET` | | Mask and protect it. |
+
+The job uses Docker-in-Docker, which needs a privileged runner. With a shell runner, or one that mounts the host's Docker socket, remove `image`, `services` and `variables` from the job.
+
+The image contains no `.env`, API keys or database, so it is safe to store in the registry. To run it on a server **without the source code**:
+
+1. Copy `docker-compose.yml`, the `docker/mysql-init/` folder (with the dump) and a `.env` for that server.
+2. In `.env`, set `KONEKTADOST_IMAGE=<registry>/<project>/konektadost:latest` (or a commit tag), plus `APP_KEY`, the `GATES_*` settings and `DOCKER_APP_URL`.
+3. Pull and start:
+
+   ```bash
+   docker login <registry>
+   docker compose pull app
+   docker compose up -d --no-build
+   ```
+
+To update, run `docker compose pull app && docker compose up -d --no-build` again.
+
 ---
 
 ## 2. Project structure
@@ -252,6 +317,10 @@ konekta-dost-eshen/
 │     ├─ DataEntries/        admin data-entry definitions (one per sector)
 │     └─ Dashboard/          user and admin dashboard data
 ├─ config/services.php       AI provider settings (ai, gates, openai)
+├─ docker/                   PHP and Apache settings, container start-up script, mysql-init/ (dump to import)
+├─ Dockerfile                image build: PHP 8.4 + Apache, Composer packages, frontend build
+├─ docker-compose.yml        app and MariaDB containers
+├─ .gitlab-ci.yml            builds the image and pushes it to the Harbor registry
 ├─ database/
 │  ├─ migrations/            application tables only: users, sessions, cache, GeoAgent history, saved plans, indexes
 │  ├─ seeders/UserSeeder.php team accounts
