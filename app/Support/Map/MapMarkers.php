@@ -12,12 +12,13 @@ use Illuminate\Support\Facades\Schema;
 /** A coordinate inventory for the map, independent of stale imported location foreign keys. */
 class MapMarkers
 {
-    public function all(GeographyExplorer $geography): array
+    /** @param  bool  $forGuest  Leaves out laboratory contact numbers for visitors who are not signed in. */
+    public function all(GeographyExplorer $geography, bool $forGuest = false): array
     {
-        return app(ReadCache::class)->remember('map.markers', [], fn () => $this->buildMarkers($geography));
+        return app(ReadCache::class)->remember('map.markers', ['guest' => $forGuest], fn () => $this->buildMarkers($geography, $forGuest));
     }
 
-    private function buildMarkers(GeographyExplorer $geography): array
+    private function buildMarkers(GeographyExplorer $geography, bool $forGuest): array
     {
         $pins = [];
         $datasets = [];
@@ -50,7 +51,7 @@ class MapMarkers
                 $details = $lab ? [
                     ['label' => 'Laboratory code', 'value' => $row->code ?? null],
                     ['label' => 'Source-listed services', 'value' => isset($row->services_count) ? (string) $row->services_count : null],
-                    ['label' => 'Contact', 'value' => $row->contact_information ?? null],
+                    ['label' => 'Contact', 'value' => $forGuest ? null : ($row->contact_information ?? null)],
                     ['label' => 'Website', 'value' => $row->website ?? null],
                 ] : [
                     ['label' => 'Network operator', 'value' => $row->operator ?? null],

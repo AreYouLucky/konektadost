@@ -29,7 +29,8 @@ export interface ProvinceResourceData {
     laboratories: { status: 'available' | 'unavailable'; count: number | null; pinned_count: number; by_category: Record<string, number> };
     telecom_sites: { status: 'available' | 'unavailable'; count: number | null; pinned_count: number; pins: MapResourcePin[] };
     records: ProvinceResourceRecord[];
-    assessment: { area_km2: number | null; results: MapAssessmentResult[] };
+    /** Absent for visitors who are not signed in. */
+    assessment?: { area_km2: number | null; results: MapAssessmentResult[] };
     population_breakdown: { level: 'municipality' | 'barangay'; year: number | null; rows: { id: number; name: string; value: number | null }[] };
     technologies: {
         status: 'available' | 'unavailable';

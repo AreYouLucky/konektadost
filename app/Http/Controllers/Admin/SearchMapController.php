@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Municipality;
 use App\Support\Assessment\IndicatorCatalog;
 use App\Support\Map\GeographyExplorer;
+use App\Support\Map\MapPageProps;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -17,21 +18,19 @@ use Inertia\Response;
 
 class SearchMapController extends Controller
 {
-    public function show(GeographyExplorer $geography): Response
+    public function show(MapPageProps $map): Response
     {
-        return $this->mapPage('admin/search-map/search-map', $geography);
+        return Inertia::render('admin/search-map/search-map', $map->toArray());
     }
 
-    public function userMap(GeographyExplorer $geography): Response
+    public function userMap(MapPageProps $map): Response
     {
-        return $this->mapPage('users/intellegence-map/intellegence-map', $geography);
+        return Inertia::render('users/intellegence-map/intellegence-map', $map->toArray());
     }
 
-    public function assessment(GeographyExplorer $geography): Response
+    public function assessment(MapPageProps $map): Response
     {
-        return $this->mapPage('admin/assessment', $geography, [
-            'dimensions' => IndicatorCatalog::dimensions(),
-        ]);
+        return Inertia::render('admin/assessment', ['dimensions' => IndicatorCatalog::dimensions(), ...$map->toArray()]);
     }
 
     public function startAssessment(Request $request, GeographyExplorer $geography): RedirectResponse
@@ -53,31 +52,6 @@ class SearchMapController extends Controller
         }
 
         return to_route('location.assess', ['city' => $code, 'focus' => $data['focus']]);
-    }
-
-    private function mapPage(string $component, GeographyExplorer $geography, array $props = []): Response
-    {
-        $error = null;
-        try {
-            $provinces = $geography->locations('province')['locations'];
-        } catch (QueryException $exception) {
-            report($exception);
-            $provinces = [];
-            $error = 'The geographic dataset is unavailable. Please check the database connection and imported geography tables.';
-        }
-
-        $satellite = config('map.satellite');
-        $satellite = $satellite['enabled'] && $satellite['attribution'] !== ''
-            && str_starts_with($satellite['url'], 'https://')
-            && collect(['{z}', '{x}', '{y}'])->every(fn ($token) => str_contains($satellite['url'], $token))
-                ? $satellite : null;
-
-        return Inertia::render($component, [
-            ...$props,
-            'provinces' => $provinces,
-            'geographyError' => $error,
-            'satellite' => $satellite,
-        ]);
     }
 
     public function geography(Request $request, GeographyExplorer $geography): JsonResponse

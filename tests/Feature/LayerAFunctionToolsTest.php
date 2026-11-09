@@ -24,7 +24,7 @@ class LayerAFunctionToolsTest extends TestCase
         PlaceDescription::flushLatestReleaseCache();
     }
 
-    public function test_registry_exposes_all_six_layer_a_function_tools(): void
+    public function test_registry_exposes_all_nine_layer_a_function_tools(): void
     {
         $registry = app(FunctionToolRegistry::class);
         $definitions = $registry->definitions('A');
@@ -38,6 +38,9 @@ class LayerAFunctionToolsTest extends TestCase
             'get_local_assets',
             'get_telecom_infrastructure',
             'get_geographic_data_availability',
+            'get_city_by_name',
+            'get_province_by_name',
+            'get_barangay_by_name',
         ], $names);
     }
 

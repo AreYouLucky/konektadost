@@ -1,12 +1,17 @@
-import PhilippineMap, { type MapLocation, type SearchMapProps } from '@/components/philippine-map';
+import PhilippineMap, { type MapLocation, type PhilippineMapProps, type SearchMapProps } from '@/components/philippine-map';
 import { geographyApi, type MapRoutePrefix } from '@/components/philippine-map/types';
 import ProvinceResourcesCard from '@/pages/admin/search-map/partials/province-resources-card';
 import { useMapMarkers } from '@/pages/admin/search-map/use-map-markers';
 import { useProvinceAgriculture } from '@/pages/admin/search-map/use-province-agriculture';
 import { useProvinceResources } from '@/pages/admin/search-map/use-province-resources';
+import { type SharedData } from '@/types';
+import { usePage } from '@inertiajs/react';
 import { useMemo, useState } from 'react';
 
-export default function IntelligenceMap({ routePrefix = 'admin.search-map', ...props }: SearchMapProps & { routePrefix?: MapRoutePrefix }) {
+export type IntelligenceMapProps = SearchMapProps & Pick<PhilippineMapProps, 'syncUrl'> & { routePrefix?: MapRoutePrefix };
+
+export default function IntelligenceMap({ routePrefix = 'admin.search-map', syncUrl = true, ...props }: IntelligenceMapProps) {
+    const { auth } = usePage<SharedData>().props;
     const [path, setPath] = useState<MapLocation[]>([]);
     const selection = path.at(-1) ?? null;
     const province = path.find((location) => location.level === 'province') ?? null;
@@ -22,7 +27,7 @@ export default function IntelligenceMap({ routePrefix = 'admin.search-map', ...p
                 {...props}
                 api={api}
                 className="absolute inset-0 h-full"
-                syncUrl
+                syncUrl={syncUrl}
                 onSelectionChange={(selected, nextPath) => {
                     if (selected?.key !== selection?.key) setInformationOpen(true);
                     setPath(nextPath);
@@ -45,6 +50,7 @@ export default function IntelligenceMap({ routePrefix = 'admin.search-map', ...p
                         retry={resources.retry}
                         open={informationOpen}
                         onOpenChange={setInformationOpen}
+                        showAssessmentLink={Boolean(auth.user)}
                         assessmentMap={routePrefix === 'admin.search-map' ? 'admin' : 'user'}
                     />
                 )}

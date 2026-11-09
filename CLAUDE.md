@@ -69,11 +69,12 @@ Removed models: `Benchmark`, `EvidenceSource`, `PsgcRelease`. Reference rates ar
 
 ```
 app/
-  FunctionTools/                 ← the deterministic engine (30 tools, Layers A–F)
+  FunctionTools/                 ← the deterministic engine (33 tools, Layers A–F)
     Contracts/FunctionToolInterface.php   name/layer/description/parameters/definition/execute
     FunctionToolRegistry.php     registry, execute() (read-cached), executeLayerA..F(location)
     LayerA..F/*.php              one class per tool
     Support/LocationResolver.php resolves location args → Province|Municipality|Barangay
+    Support/LocationNameLookup.php finds a province, city/municipality or barangay by name
     Support/SpatialMetrics.php   Haversine and spatial helpers
   Support/
     Assessment/   LocationAssessor (indicators vs dynamic benchmarks), IndicatorCatalog (dimensions),
@@ -101,9 +102,9 @@ app/
 
 | Layer | Tools |
 |---|---|
-| **A – Data retrieval** | `get_municipality_profile`, `get_population_statistics`, `get_available_datasets`, `get_local_assets`, `get_telecom_infrastructure`, `get_geographic_data_availability` |
+| **A – Data retrieval** | `get_municipality_profile`, `get_population_statistics`, `get_available_datasets`, `get_local_assets`, `get_telecom_infrastructure`, `get_geographic_data_availability`, `get_city_by_name`, `get_province_by_name`, `get_barangay_by_name` |
 | **B – Sector analysis** | `calculate_indicators`, `analyze_health_access`, `analyze_education_access`, `analyze_digital_connectivity`, `analyze_road_accessibility`, `analyze_agriculture`, `analyze_sti_laboratory_capacity`, `analyze_safety_and_drrm` |
-| **C – Gaps & priority** | `detect_development_gaps` (severity 0–100), `identify_underserved_areas`, `calculate_priority_scores` (barangay composite 0–100), `compare_locations` (selected municipality vs another, same references) |
+| **C – Gaps & priority** | `detect_development_gaps` (severity 0–100), `identify_underserved_areas`, `calculate_priority_scores` (barangay composite 0–100), `compare_locations` (two provinces, cities/municipalities or barangays, same references) |
 | **D – Catalog** | `search_dost_technologies`, `get_local_dost_projects` |
 | **E – Matching & feasibility** | `match_dost_interventions`, `assess_intervention_suitability`, `assess_implementation_feasibility`, `identify_implementation_partners`, `estimate_intervention_requirements` |
 | **F – Plan & outputs** | `generate_intervention_plan`, `define_performance_indicators`, `estimate_intervention_outcomes`, `conduct_risk_assessment`, `generate_action_plan` |
@@ -119,7 +120,7 @@ The threshold is ≥40 (≥45 for projects). In `executeLayerE` only the **top**
 
 | Route | Page (`resources/js/pages/…`) | Notes |
 |---|---|---|
-| `/` | `welcome.tsx` | landing |
+| `/` | `welcome.tsx` | landing: only the header and the intelligence map. Guests use the throttled `public-map.*` routes (`/public-map/*`), which omit contact numbers and assessment results, and see no assessment button; `/intelligence-map/*` stays login-only |
 | `/dashboard` (`user.dashboard.index`) | `users/dashboard/user-dashboard.tsx` | location quick-start (municipality search → assessment), workflow, coverage KPIs, catalog browser, project charts, own plans and conversations |
 | `/intelligence-map` | `users/intellegence-map/intellegence-map.tsx` → `components/intelligence-map.tsx` | MapLibre explorer; URL `?level=&location=`; the province resource card links to an assessment with `map=user` |
 | `/location` | `location-map.tsx` | Leaflet service-area map (`?province=&city=` PSGC); hidden from the user sidebar, route still live |
@@ -134,7 +135,7 @@ The user layout is `layouts/app/app-sidebar-layout.tsx` with `components/app-sid
 
 ## 6. AI layer (implemented)
 
-- **Planning chat** (`PlanningChatService`): uses the configured Responses API (GATES or OpenAI) with function calling over **all 30 registry tools** (incl. `compare_locations`, rendered as a `comparison` visual). Location arguments (`municipality_id`, `psg_code`, `gaps`, `custom_weights`, …) are stripped from the schemas and injected by the server. Limits: max 5 rounds and 12 calls, a 150 s budget, `store=false`, and the last 4 turns plus the latest saved draft as context. A reply that contains all 5 numbered headings is auto-saved as a new plan version (`PlanningChatHistory::isActionPlan`). The system prompt in `instructions()` focuses plans on **technology-to-location assignments**.
+- **Planning chat** (`PlanningChatService`): uses the configured Responses API (GATES or OpenAI) with function calling over **all 33 registry tools** (incl. `compare_locations`, rendered as a `comparison` visual). Location arguments (`municipality_id`, `psg_code`, `gaps`, `custom_weights`, …) are stripped from the schemas and injected by the server. Limits: max 5 rounds and 12 calls, a 150 s budget, `store=false`, and the last 4 turns plus the latest saved draft as context. A reply that contains all 5 numbered headings is auto-saved as a new plan version (`PlanningChatHistory::isActionPlan`). The system prompt in `instructions()` focuses plans on **technology-to-location assignments**.
 - **Assessment interpretation** (`AssessmentAiService`): a structured-schema OpenAI call over compact assessment evidence. It is validated and cached per evidence hash, with a lock against duplicate calls.
 - Without a configured provider (GATES key + base URL, or `OPENAI_API_KEY`), both return an `unavailable` status. The deterministic pages still work. GATES error codes (`budget_exhausted`, `model_not_allowed`, `rate_limit_exceeded`, `request_too_large`, …) map to specific messages in `ResponsesClient::gatesFailureMessage`; failures log only status, code and request ID.
 

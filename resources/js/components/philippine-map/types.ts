@@ -63,7 +63,7 @@ export interface GeographyApi {
     search: (query: string) => string;
 }
 
-export type MapRoutePrefix = 'admin.search-map' | 'user.intelligence-map';
+export type MapRoutePrefix = 'admin.search-map' | 'user.intelligence-map' | 'public-map';
 
 export function geographyApi(routePrefix: MapRoutePrefix): GeographyApi {
     return {

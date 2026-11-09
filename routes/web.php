@@ -24,6 +24,21 @@ Route::get('/', WelcomeController::class)->name('home');
 Route::get('csrf-token', fn () => response()->json(['token' => csrf_token()])->header('Cache-Control', 'private, no-store'))
     ->middleware('throttle:60,1')->name('csrf-token');
 
+// Read-only data for the map on the public landing page. Kept apart from the signed-in map routes,
+// which stay login-only; guests never receive contact numbers or assessment results.
+// Throttle prefixes stop these limits sharing a per-IP counter with each other or with other routes.
+Route::prefix('public-map')->name('public-map.')->group(function () {
+    Route::get('markers', MapMarkersController::class)->middleware('throttle:20,1,public-map-markers')->name('markers');
+    Route::middleware('throttle:120,1,public-map')->group(function () {
+        Route::get('provinces/{province}/agriculture', ProvinceAgricultureController::class)->whereNumber('province')->name('agriculture');
+        Route::get('provinces/{province}/resources', ProvinceResourcesController::class)->whereNumber('province')->name('resources');
+        Route::get('geography', [SearchMapController::class, 'geography'])->name('geography');
+        Route::get('search', [SearchMapController::class, 'search'])->name('search');
+        Route::get('locations/{level}/{id}', [SearchMapController::class, 'selection'])->whereNumber('id')->name('selection');
+        Route::get('locations/{level}/{id}/roads', LocationRoadsController::class)->whereNumber('id')->name('roads');
+    });
+});
+
 Route::middleware(['auth'])->group(function () {
     Route::get('dashboard', UserDashboardController::class)->name('user.dashboard.index');
 

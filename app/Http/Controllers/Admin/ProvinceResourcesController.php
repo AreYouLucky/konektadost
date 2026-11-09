@@ -18,7 +18,7 @@ class ProvinceResourcesController extends Controller
         try {
             $scope = GeographicScope::fromRequest($request, $province, $geography);
 
-            return response()->json($resources->summary($province, $geography, $scope))->header('Cache-Control', 'private, max-age=60');
+            return response()->json($resources->summary($province, $geography, $scope, forGuest: $request->user() === null))->header('Cache-Control', 'private, max-age=60');
         } catch (QueryException $exception) {
             report($exception);
 

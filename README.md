@@ -303,7 +303,7 @@ To update, run `docker compose pull app && docker compose up -d --no-build` agai
 konekta-dost-eshen/
 ├─ app/
 │  ├─ Console/Commands/      ai:check, resources:relink-locations, app:dost-project-query
-│  ├─ FunctionTools/         the 30 deterministic analysis tools (Layers A–F) and their registry
+│  ├─ FunctionTools/         the 33 deterministic analysis tools (Layers A–F) and their registry
 │  │  ├─ LayerA … LayerF/    data retrieval, sector analysis, gaps and priorities, catalog, matching, planning
 │  │  └─ Support/            location resolver and spatial helpers
 │  ├─ Http/Controllers/      LocationController (assessments), PlanningChatController (GeoAgent),

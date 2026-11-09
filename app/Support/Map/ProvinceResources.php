@@ -14,13 +14,14 @@ use Illuminate\Support\Facades\Schema;
 
 class ProvinceResources
 {
-    public function summary(Province $province, GeographyExplorer $geography, ?GeographicScope $scope = null): array
+    /** @param  bool  $forGuest  Leaves out contact numbers and assessment results for visitors who are not signed in. */
+    public function summary(Province $province, GeographyExplorer $geography, ?GeographicScope $scope = null, bool $forGuest = false): array
     {
-        return app(ReadCache::class)->remember('map.resources', ['province' => $province->id, 'scope' => $scope?->toArray()],
-            fn () => $this->buildSummary($province, $geography, $scope));
+        return app(ReadCache::class)->remember('map.resources', ['province' => $province->id, 'scope' => $scope?->toArray(), 'guest' => $forGuest],
+            fn () => $this->buildSummary($province, $geography, $scope, $forGuest));
     }
 
-    private function buildSummary(Province $province, GeographyExplorer $geography, ?GeographicScope $scope): array
+    private function buildSummary(Province $province, GeographyExplorer $geography, ?GeographicScope $scope, bool $forGuest): array
     {
         $scope ??= GeographicScope::province($province);
         $municipalities = collect($geography->locations('municipality', (int) $province->id)['locations'])->keyBy('id');
@@ -100,7 +101,7 @@ class ProvinceResources
                         'description' => $row->description ?? null,
                         'code' => $row->code ?? null,
                         'website' => $row->website ?? null,
-                        'contact' => $row->contact_information ?? null,
+                        'contact' => $forGuest ? null : ($row->contact_information ?? null),
                         'source_url' => $row->source_url ?? null,
                         'source_record_id' => isset($row->source_record_id) ? (string) $row->source_record_id : null,
                         'record_updated_at' => $row->updated_at ?? null,
@@ -122,7 +123,7 @@ class ProvinceResources
             'population_breakdown' => $this->populationBreakdown($scope, $geography, $population),
             'technologies' => app(DostTechnologyLocations::class)->summary($scope, $municipalities),
             'telecom_sites' => app(TelecomResources::class)->summary($scope, $municipalities, $barangays, $barangayParents),
-            'assessment' => app(SelectionAssessment::class)->summary($scope, $population, $inventories, $ids, $barangays),
+            ...($forGuest ? [] : ['assessment' => app(SelectionAssessment::class)->summary($scope, $population, $inventories, $ids, $barangays)]),
             ...$summaries,
             'records' => $records,
         ];

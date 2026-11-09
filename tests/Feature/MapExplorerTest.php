@@ -150,6 +150,64 @@ class MapExplorerTest extends TestCase
         $this->getJson('/intelligence-map/locations/barangay/102')->assertUnprocessable();
     }
 
+    public function test_the_landing_page_preloads_the_map(): void
+    {
+        $this->get('/')->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->component('welcome')->has('map.provinces', 2)
+            ->where('map.geographyError', null)->where('map.satellite', null)->missing('map.provinces.0.geometry'));
+    }
+
+    public function test_guests_can_load_the_public_map_data(): void
+    {
+        $this->getJson('/public-map/geography?level=municipality&parent=1')->assertOk()
+            ->assertJsonCount(1, 'locations')->assertJsonPath('locations.0.id', 11);
+        $this->getJson('/public-map/search?q=Quezon%20City')->assertOk()->assertJsonPath('results.0.id', 11);
+        $this->getJson('/public-map/locations/barangay/101')->assertOk()->assertJsonPath('path.2.id', 101);
+        $this->getJson('/public-map/locations/municipality/11/roads')->assertOk();
+        $this->getJson('/public-map/markers')->assertOk()->assertJsonStructure(['pins', 'datasets']);
+        $this->getJson('/public-map/provinces/1/resources?level=municipality&location=11')->assertOk()
+            ->assertJsonPath('scope.level', 'municipality')->assertJsonPath('scope.id', 11);
+        $this->getJson('/public-map/provinces/1/agriculture?level=barangay&location=101')->assertOk()
+            ->assertJsonPath('scope.level', 'barangay')->assertJsonPath('scope.id', 101);
+    }
+
+    public function test_guests_do_not_receive_contact_numbers_or_assessment_results(): void
+    {
+        $this->createResourceTables();
+        Schema::table('laboratories', fn (Blueprint $table) => $table->string('contact_information')->nullable());
+        DB::table('laboratories')->insert(['agency_name' => 'Detailed lab', 'municipality_id' => 11, 'latitude' => 14.5, 'longitude' => 120.5,
+            'contact_information' => 'Recorded contact']);
+
+        $this->getJson('/public-map/markers')->assertOk()->assertJsonPath('pins.0.name', 'Detailed lab')->assertDontSee('Recorded contact');
+        $this->getJson('/public-map/provinces/1/resources')->assertOk()
+            ->assertJsonPath('records.0.name', 'Detailed lab')
+            ->assertJsonPath('records.0.metadata.contact', null)
+            ->assertJsonMissingPath('assessment');
+
+        $this->actingAs(new User(['id' => 2, 'role' => 'user']));
+        $this->getJson('/intelligence-map/markers')->assertOk()->assertSee('Recorded contact');
+        $this->getJson('/intelligence-map/provinces/1/resources')->assertOk()
+            ->assertJsonPath('records.0.metadata.contact', 'Recorded contact')
+            ->assertJsonStructure(['assessment']);
+    }
+
+    public function test_the_public_map_adds_no_admin_or_assessment_access(): void
+    {
+        $this->getJson('/public-map/provinces/1/agriculture/records')->assertNotFound();
+        $this->postJson('/public-map/markers')->assertMethodNotAllowed();
+        $this->get('/location/assess?level=province&location=1&focus=general&map=user')->assertRedirect(route('login'));
+    }
+
+    public function test_public_marker_downloads_have_their_own_limit(): void
+    {
+        for ($attempt = 0; $attempt < 20; $attempt++) {
+            $this->getJson('/public-map/markers')->assertOk();
+        }
+
+        $this->getJson('/public-map/markers')->assertTooManyRequests();
+        $this->getJson('/public-map/geography?level=province')->assertOk();
+    }
+
     public function test_assessment_uses_the_selected_municipality_psgc_without_losing_leading_zeroes(): void
     {
         Schema::table('municipalities', fn (Blueprint $table) => $table->string('psg_code')->nullable());

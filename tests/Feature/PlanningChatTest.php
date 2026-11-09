@@ -389,7 +389,7 @@ class PlanningChatTest extends TestCase
     public function test_openai_tool_schemas_exclude_server_only_arguments(): void
     {
         $definitions = app(PlanningChatService::class)->definitions();
-        $this->assertCount(30, $definitions);
+        $this->assertCount(33, $definitions);
         foreach ($definitions as $definition) {
             $this->assertSame('function', $definition['type']);
             $this->assertFalse($definition['parameters']['additionalProperties']);

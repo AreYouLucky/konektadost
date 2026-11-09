@@ -4,10 +4,13 @@ namespace App\FunctionTools;
 
 use App\FunctionTools\Contracts\FunctionToolInterface;
 use App\FunctionTools\LayerA\GetAvailableDatasetsTool;
+use App\FunctionTools\LayerA\GetBarangayByNameTool;
+use App\FunctionTools\LayerA\GetCityByNameTool;
 use App\FunctionTools\LayerA\GetGeographicDataAvailabilityTool;
 use App\FunctionTools\LayerA\GetLocalAssetsTool;
 use App\FunctionTools\LayerA\GetMunicipalityProfileTool;
 use App\FunctionTools\LayerA\GetPopulationStatisticsTool;
+use App\FunctionTools\LayerA\GetProvinceByNameTool;
 use App\FunctionTools\LayerA\GetTelecomInfrastructureTool;
 use App\FunctionTools\LayerB\AnalyzeAgricultureTool;
 use App\FunctionTools\LayerB\AnalyzeDigitalConnectivityTool;
@@ -42,7 +45,7 @@ use InvalidArgumentException;
  * Central Registry & Dispatcher for KonektaDOST Function Tools.
  *
  * Organized strictly by layer:
- * - Layer A (A1–A6): Municipality and Data Retrieval
+ * - Layer A (A1–A9): Municipality and Data Retrieval
  * - Layer B (B1–B8): Domain Indicator and Sector Analysis
  */
 class FunctionToolRegistry
@@ -60,6 +63,9 @@ class FunctionToolRegistry
         GetLocalAssetsTool::class,                // A4: get_local_assets
         GetTelecomInfrastructureTool::class,      // A5: get_telecom_infrastructure
         GetGeographicDataAvailabilityTool::class, // A6: get_geographic_data_availability
+        GetCityByNameTool::class,                 // A7: get_city_by_name
+        GetProvinceByNameTool::class,             // A8: get_province_by_name
+        GetBarangayByNameTool::class,             // A9: get_barangay_by_name
 
         // Layer B – Domain Indicator and Sector Analysis
         CalculateIndicatorsTool::class,           // B1: calculate_indicators
